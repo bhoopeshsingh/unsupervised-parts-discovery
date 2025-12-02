@@ -41,11 +41,17 @@ def load_clustering_data(parts_dir, clusters_dir):
     part_to_slot = np.load(clusters_dir / 'part_to_slot.npy')
     part_to_class = np.load(clusters_dir / 'part_to_class.npy')
     
+    # Try to load images if available
+    images = None
+    if (parts_dir / 'images.npy').exists():
+        images = np.load(parts_dir / 'images.npy')
+    
     with open(clusters_dir / 'cluster_metadata.json', 'r') as f:
         cluster_metadata = json.load(f)
     
     return {
         'masks': masks,
+        'images': images,
         'image_labels': labels,
         'parts_metadata': parts_metadata,
         'cluster_labels': cluster_labels,
@@ -95,18 +101,26 @@ def get_cluster_samples(cluster_id, data, max_samples=20):
         # Get the mask for this part
         mask = data['masks'][image_idx, slot_idx]
         
+        # Get image if available
+        image = None
+        if data['images'] is not None:
+            image = data['images'][image_idx]
+        
         samples.append({
             'part_idx': part_idx,
             'image_idx': image_idx,
             'slot_idx': slot_idx,
             'class_label': class_label,
-            'mask': mask
+            'mask': mask,
+            'image': image
         })
     
     return samples
 
 def display_cluster_samples(samples, class_names, cols=5):
-    """Display cluster samples in a grid"""
+    """Display cluster samples in a grid with high-res overlay"""
+    import cv2
+    
     num_samples = len(samples)
     num_rows = (num_samples + cols - 1) // cols
     
@@ -119,19 +133,48 @@ def display_cluster_samples(samples, class_names, cols=5):
             
             sample = samples[sample_idx]
             
-            # Create figure
-            fig, ax = plt.subplots(figsize=(3, 3))
-            ax.imshow(sample['mask'], cmap='hot', interpolation='bilinear')
-            ax.axis('off')
-            ax.set_title(
-                f"Img {sample['image_idx']}, Slot {sample['slot_idx']}\n"
-                f"{class_names[sample['class_label']]}",
-                fontsize=8
-            )
-            
             with columns[col_idx]:
-                st.pyplot(fig)
-                plt.close(fig)
+                if sample['image'] is not None:
+                    # Create overlay
+                    img = sample['image'].copy() # [H, W, 3] uint8
+                    mask = sample['mask'] # [H, W] float
+                    
+                    # Resize mask to match image if needed (though they should match)
+                    if mask.shape != img.shape[:2]:
+                        mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+                    
+                    # Normalize mask for visualization
+                    mask_norm = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
+                    
+                    # Create heatmap (red)
+                    heatmap = np.zeros_like(img)
+                    heatmap[:, :, 0] = 255 # Red channel
+                    
+                    # Apply mask opacity
+                    # Stronger opacity for higher attention
+                    opacity = mask_norm[:, :, np.newaxis] * 0.7
+                    
+                    # Blend
+                    overlay = img * (1 - opacity) + heatmap * opacity
+                    overlay = overlay.astype(np.uint8)
+                    
+                    # Upsample for display (e.g., 128x128)
+                    display_size = (128, 128)
+                    overlay_large = cv2.resize(overlay, display_size, interpolation=cv2.INTER_NEAREST)
+                    
+                    st.image(overlay_large, caption=f"{class_names[sample['class_label']]}\n(Img {sample['image_idx']})", clamp=True)
+                else:
+                    # Fallback to mask only
+                    fig, ax = plt.subplots(figsize=(3, 3))
+                    ax.imshow(sample['mask'], cmap='hot', interpolation='bilinear')
+                    ax.axis('off')
+                    ax.set_title(
+                        f"Img {sample['image_idx']}, Slot {sample['slot_idx']}\n"
+                        f"{class_names[sample['class_label']]}",
+                        fontsize=8
+                    )
+                    st.pyplot(fig)
+                    plt.close(fig)
 
 @st.cache_resource
 def get_inference_pipeline():
@@ -305,6 +348,8 @@ def render_labeling_page():
                     'cluster_size': int(cluster_size)
                 }
                 save_cluster_labels(cluster_labels_dict, labels_file)
+                # Force reload to ensure UI updates
+                st.cache_data.clear()
                 st.rerun()
             else:
                 st.error("Please enter a semantic label")
@@ -375,6 +420,22 @@ def render_inference_page():
             st.image(results['original'], caption="Original Image", use_column_width=True)
         with col2:
             st.image(results['reconstruction'], caption="Model Reconstruction", use_column_width=True, clamp=True)
+        
+        # Display Prediction
+        st.markdown("---")
+        st.subheader("Prediction")
+        pred_class = results.get('predicted_class', 'Unknown')
+        probs = results.get('class_probs', {})
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.metric("Predicted Class", pred_class)
+        
+        with col2:
+            if probs:
+                st.write("Class Confidence:")
+                for cls, prob in probs.items():
+                    st.progress(prob, text=f"{cls}: {prob:.1%}")
             
         st.markdown("---")
         st.subheader("Discovered Parts")

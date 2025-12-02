@@ -1,0 +1,68 @@
+{
+  "5": {
+    "label": "wing",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1451
+  },
+  "0": {
+    "label": "head",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1295
+  },
+  "2": {
+    "label": "taxi",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1579
+  },
+  "8": {
+    "label": "engine",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 2107
+  },
+  "7": {
+    "label": "wheels",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1866
+  },
+  "1": {
+    "label": "wing_edge",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1992
+  },
+  "16": {
+    "label": "leg",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1792
+  },
+  "40": {
+    "label": "face",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1672
+  },
+  "39": {
+    "label": "eye",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 2131
+  },
+  "20": {
+    "label": "eye",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1527
+  },
+  "19": {
+    "label": "face",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1804
+  }
+}

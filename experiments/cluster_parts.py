@@ -18,6 +18,8 @@ from src.clustering.cluster import (
     visualize_clusters_by_class,
     visualize_clusters_per_class_separate_files
 )
+import warnings
+warnings.filterwarnings('ignore')
 
 
 def load_parts_data(parts_dir):
@@ -97,7 +99,17 @@ def main():
     # This is crucial for clustering embeddings, effectively using cosine similarity
     print("Normalizing features (L2)...")
     from sklearn.preprocessing import normalize
-    features = normalize(features, norm='l2', axis=1)
+    
+    # Add small epsilon to avoid division by zero for zero vectors
+    norm = np.linalg.norm(features, axis=1, keepdims=True)
+    # Avoid division by zero
+    norm[norm == 0] = 1e-10
+    features = features / norm
+    
+    # Check for NaNs
+    if np.isnan(features).any():
+        print("WARNING: NaNs detected in features after normalization! Replacing with zeros.")
+        features = np.nan_to_num(features)
     
     # Also create mapping from part index to (image_id, slot_id)
     N_images, N_slots = parts_data['slots'].shape[:2]
@@ -137,7 +149,7 @@ def main():
             class_labels=part_to_class,
             class_names=parts_data['metadata']['classes'],
             k_range=(args.k_min, args.k_max),
-            n_init=20,
+            n_init=3,
             random_state=42
         )
         

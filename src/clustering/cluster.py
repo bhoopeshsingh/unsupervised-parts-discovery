@@ -79,8 +79,10 @@ def plot_clustering_metrics(metrics, optimal_k, save_path):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path)
-        plt.close()
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
+    else:
+        plt.show()
 
 def cluster_parts(features, n_clusters, n_init=20, random_state=42):
     """
@@ -95,6 +97,12 @@ def cluster_parts(features, n_clusters, n_init=20, random_state=42):
         kmeans_model: Fitted KMeans object
     """
     print(f"Clustering {len(features)} parts into {n_clusters} clusters...")
+    
+    # Normalize features (L2 normalization)
+    norm = np.linalg.norm(features, axis=1, keepdims=True)
+    norm[norm == 0] = 1e-10
+    features = features / norm
+    features = np.nan_to_num(features)
     
     kmeans = KMeans(
         n_clusters=n_clusters,
@@ -140,6 +148,15 @@ def cluster_parts_per_class(features, class_labels, class_names, k_range=(5, 20)
     cluster_metadata = {} # global_id -> {'class': name, 'local_id': id}
     metrics = {}
     
+    # Normalize features (L2 normalization) to ensure cosine similarity behavior
+    print("Normalizing features (L2) before clustering...")
+    from sklearn.preprocessing import normalize
+    # Add small epsilon to avoid division by zero for zero vectors
+    norm = np.linalg.norm(features, axis=1, keepdims=True)
+    norm[norm == 0] = 1e-10
+    features = features / norm
+    features = np.nan_to_num(features)
+    
     current_global_id_offset = 0
     
     for class_idx, class_name in enumerate(class_names):
@@ -165,7 +182,7 @@ def cluster_parts_per_class(features, class_labels, class_names, k_range=(5, 20)
         optimal_k, class_metrics = determine_optimal_k(
             class_features, 
             k_range=(effective_min_k, effective_max_k),
-            n_init=10,
+            n_init=3,
             random_state=random_state
         )
         
@@ -341,8 +358,8 @@ def visualize_cluster_samples_high_res(
             
     plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=150)
-        plt.close()
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
     else:
         plt.show()
 
@@ -390,9 +407,8 @@ def visualize_clusters_tsne(features, labels, class_labels=None, perplexity=30, 
     plt.title('t-SNE Projection of Extracted Parts (Colored by Cluster)')
     
     if save_path:
-        plt.savefig(save_path)
-        plt.close()
-        print(f"Saved t-SNE plot to {save_path}")
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
     else:
         plt.show()
 
@@ -475,9 +491,8 @@ def visualize_clusters_by_class(features, labels, class_labels, class_names, per
     plt.suptitle('t-SNE Projection by Class (Consistent Cluster Colors)', fontsize=16)
     
     if save_path:
-        plt.savefig(save_path, bbox_inches='tight')
-        plt.close()
-        print(f"Saved per-class t-SNE plot to {save_path}")
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
     else:
         plt.show()
 
@@ -544,6 +559,5 @@ def visualize_clusters_per_class_separate_files(features, labels, class_labels, 
         plt.axis('off') # Clean look
         
         save_path = output_dir / f'tsne_class_{class_name.lower()}.png'
-        plt.savefig(save_path, bbox_inches='tight')
-        plt.close()
-        print(f"Saved individual t-SNE plot to {save_path}")
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()

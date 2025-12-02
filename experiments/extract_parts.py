@@ -44,6 +44,7 @@ def extract_parts(
     all_masks = []
     all_image_ids = []
     all_labels = []
+    all_images = []
     
     print("Extracting parts from images...")
     
@@ -53,6 +54,9 @@ def extract_parts(
                 break
             
             images = images.to(device)
+            
+            # Store original images (for visualization)
+            all_images.append(images.cpu())
             
             # Forward pass through backbone
             features = backbone.get_feature_maps(images)
@@ -80,6 +84,26 @@ def extract_parts(
         'labels': np.array(all_labels)
     }
     
+    # Process images if collected
+    if len(all_images) > 0:
+        # Concatenate and denormalize
+        images_tensor = torch.cat(all_images, dim=0) # [N, 3, H, W]
+        
+        # Inverse normalize
+        from src.data.transforms import get_inverse_normalize
+        inv_norm = get_inverse_normalize()
+        
+        # Process in chunks to avoid memory issues if needed, but for CIFAR it's fine
+        images_denorm = []
+        for i in range(len(images_tensor)):
+            img = inv_norm(images_tensor[i])
+            # Clip and convert to uint8 [H, W, 3]
+            img = img.permute(1, 2, 0).cpu().numpy()
+            img = np.clip(img * 255, 0, 255).astype(np.uint8)
+            images_denorm.append(img)
+            
+        parts_data['images'] = np.array(images_denorm)
+    
     print(f"\nExtracted parts from {len(all_image_ids)} images")
     print(f"Slots shape: {parts_data['slots'].shape}")
     print(f"Masks shape: {parts_data['masks'].shape}")
@@ -98,6 +122,9 @@ def save_parts_data(parts_data, save_dir, metadata):
     np.save(save_dir / 'masks.npy', parts_data['masks'])
     np.save(save_dir / 'image_ids.npy', parts_data['image_ids'])
     np.save(save_dir / 'labels.npy', parts_data['labels'])
+    if 'images' in parts_data:
+        np.save(save_dir / 'images.npy', parts_data['images'])
+        print(f"  - images.npy: {parts_data['images'].nbytes / 1e6:.2f} MB")
     
     # Save metadata
     metadata_path = save_dir / 'metadata.json'

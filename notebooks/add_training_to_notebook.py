@@ -15,7 +15,7 @@ training_cell = {
         "# Train Part Discovery Model\n",
         "# We re-train the model with the new stable configuration (frozen backbone, 6 slots)\n",
         "print(\"Starting Model Training... (This may take a while)\")\n",
-        "!python experiments/train_part_discovery.py\n",
+        "!python ../experiments/train_part_discovery.py\n",
         "print(\"Training Completed!\")"
     ]
 }

@@ -73,7 +73,22 @@ class InferencePipeline:
         self.centroid_map = [] 
         centroids = []
         
+        # Handle if cluster_metadata is list or dict
+        if isinstance(self.cluster_metadata, list):
+            # It's a list of dicts, likely from the new per-class clustering
+            # We need to index it by cluster ID
+            temp_metadata = {}
+            for i, data in enumerate(self.cluster_metadata):
+                # Use 'cluster_id' if available, else index
+                cid = data.get('cluster_id', i)
+                temp_metadata[str(cid)] = data
+            self.cluster_metadata = temp_metadata
+            
         for global_id, data in self.cluster_metadata.items():
+            # Skip summary stats (which are not dicts)
+            if not isinstance(data, dict):
+                continue
+                
             if 'centroid' in data:
                 centroids.append(data['centroid'])
                 self.centroid_map.append(int(global_id))
@@ -97,8 +112,13 @@ class InferencePipeline:
         Returns:
             dict with results
         """
-        if isinstance(image, (str, Path)):
-            image = Image.open(image).convert('RGB')
+        # Handle different input types
+        if not isinstance(image, Image.Image):
+            try:
+                image = Image.open(image).convert('RGB')
+            except Exception as e:
+                print(f"Error opening image: {e}")
+                raise ValueError(f"Could not open image. Input type: {type(image)}")
         
         # Preprocess
         img_tensor = self.transform(image).unsqueeze(0).to(self.device)
@@ -142,8 +162,44 @@ class InferencePipeline:
                     'mask': masks[i]
                 })
                 
+        # Predict Class
+        predicted_class = "Unknown"
+        class_probs = {}
+        
+        if results:
+            # Simple voting: Sum scores for each class associated with the detected clusters
+            # We need the cluster -> class mapping from metadata
+            cluster_classes = {}
+            for gid, meta in self.cluster_metadata.items():
+                # Skip summary stats
+                if not isinstance(meta, dict):
+                    continue
+                    
+                if 'class_name' in meta: # Assuming we saved this
+                    cluster_classes[int(gid)] = meta['class_name']
+                # Fallback: check dominant class from distribution if available
+                elif 'class_distribution' in meta:
+                    dist = meta['class_distribution']
+                    # Find max class
+                    max_cls = max(dist.items(), key=lambda x: x[1])[0]
+                    cluster_classes[int(gid)] = max_cls
+            
+            scores = {}
+            for res in results:
+                cid = res['cluster_id']
+                if cid in cluster_classes:
+                    cls = cluster_classes[cid]
+                    scores[cls] = scores.get(cls, 0) + res['score']
+            
+            if scores:
+                predicted_class = max(scores.items(), key=lambda x: x[1])[0]
+                total_score = sum(scores.values())
+                class_probs = {k: v/total_score for k, v in scores.items()}
+
         return {
             'original': image,
             'reconstruction': recon,
-            'parts': results
+            'parts': results,
+            'predicted_class': predicted_class,
+            'class_probs': class_probs
         }

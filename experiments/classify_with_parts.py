@@ -174,8 +174,10 @@ def plot_confusion_matrix(y_true, y_pred, class_names, save_path):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path)
-        print(f"Confusion matrix saved to: {save_path}")
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
+    else:
+        plt.show()
     plt.close()
 
 def main():
