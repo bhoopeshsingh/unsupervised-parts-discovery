@@ -1,0 +1,43 @@
+# Model Architecture Configuration
+
+# Shared Backbone
+backbone:
+  name: "resnet50"
+  pretrained: true
+  freeze_early_layers: true  # Changed to TRUE to stabilize features
+  feature_dim: 2048  # ResNet50 output dimension
+
+# Slot Attention for Part Discovery
+slot_attention:
+  num_slots: 6  # Reduced from 8 to simplify the task
+  slot_dim: 128  # Dimension of each slot
+  hidden_dim: 256  # Hidden dimension for MLP
+  num_iterations: 7  # Increased from 5
+  
+  # Encoder (processes backbone features)
+  encoder:
+    input_dim: 2048  # From ResNet50
+    output_dim: 128  # Match slot_dim
+    hidden_dims: [512, 256]
+  
+  # Decoder (for reconstruction)
+  decoder:
+    input_dim: 128
+    hidden_dims: [256, 512]
+    output_channels: 3  # RGB
+    output_size: 32  # CIFAR-10 size
+  
+  # Loss weights
+  loss:
+    reconstruction_weight: 1.0
+    diversity_weight: 0.1  # Encourage diverse slots
+
+# Classification Head
+classifier:
+  input_dim: 2048  # From ResNet50
+  hidden_dims: [512, 256]
+  num_classes: 4  # airplane, automobile, cat, dog
+  dropout: 0.3
+
+# Device settings
+device: "mps"  # For M4 Mac (use "cuda" for NVIDIA, "cpu" for CPU-only)

@@ -1,0 +1,51 @@
+# Data Configuration for CIFAR-10 Subset
+
+dataset:
+  name: "cifar10"
+  root: "./data"
+  download: true
+  
+  # Classes to use (4 classes for initial experiments)
+  classes:
+    - "airplane"  # class_idx: 0
+    - "cat"  # class_idx: 3
+    - "dog"  # class_idx: 5
+  
+  # Approximate 5000 images per class from CIFAR-10 training set
+  # CIFAR-10 has 50,000 training images (5,000 per class)
+  train_split: 1.0  # Use all available images for selected classes
+  val_split: 0.2    # 20% for validation
+  
+  # Image properties
+  img_size: 32  # CIFAR-10 native size
+  num_channels: 3
+
+# Data augmentation
+augmentation:
+  train:
+    random_crop: true
+    crop_size: 32
+    padding: 4
+    horizontal_flip: true
+    flip_prob: 0.5
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+  
+  val:
+    # No augmentation for validation
+    resize: 32
+
+# DataLoader settings
+dataloader:
+  batch_size: 128
+  num_workers: 4
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: true
+
+# Random seed for reproducibility
+seed: 42

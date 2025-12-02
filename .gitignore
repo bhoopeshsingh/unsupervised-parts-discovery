@@ -1,0 +1,53 @@
+# Add checkpoints and downloaded data to gitignore
+checkpoints/
+data/cifar-10-batches-py/
+data/cifar-10-python.tar.gz
+notebooks/data/
+*.pt
+*.pth
+*.pkl
+*.npy
+
+# Weights & Biases
+wandb/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+!notebooks/phase2_pipeline_test.ipynb
+
+# Plots and visualizations
+*.png
+*.jpg
+*.jpeg
+!assets/*.png
+!assets/*.jpg
+
+# Logs
+*.log
+logs/

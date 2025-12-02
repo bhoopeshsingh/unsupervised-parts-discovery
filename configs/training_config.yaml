@@ -1,0 +1,57 @@
+# Training Configuration
+
+# Part Discovery Training
+part_discovery:
+  epochs: 50  # Increased from 30
+  learning_rate: 0.001  # Increased from 0.0004
+  weight_decay: 0.0001
+  optimizer: "adam"
+  scheduler:
+    type: "cosine_warmup"
+    warmup_epochs: 10  # Increased from 5
+    T_max: 50
+    eta_min: 0.00001
+  
+  # Checkpointing
+  checkpoint_dir: "./checkpoints/part_discovery"
+  save_every: 5
+  save_best: true
+  
+  # Logging
+  log_every: 10  # Log every N batches
+  visualize_every: 100  # Visualize parts every N batches
+
+# Classification Training
+classification:
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  optimizer: "adam"
+  scheduler:
+    type: "step"
+    step_size: 20
+    gamma: 0.1
+  
+  # Checkpointing
+  checkpoint_dir: "./checkpoints/classification"
+  save_every: 10
+  save_best: true
+  
+  # Logging
+  log_every: 10
+
+# Weights & Biases Configuration
+wandb:
+  project: "unsupervised-parts-discovery"
+  entity: null  # Set to your W&B username
+  mode: "online"  # "online", "offline", or "disabled"
+  tags:
+    - "cifar10"
+    - "slot-attention"
+    - "4-classes"
+  notes: "Initial experiments with 4-class CIFAR-10 subset"
+
+# Early stopping
+early_stopping:
+  patience: 10
+  min_delta: 0.001

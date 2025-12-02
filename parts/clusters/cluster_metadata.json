@@ -1,0 +1,11 @@
+{
+  "n_clusters": 12,
+  "n_parts": 71424,
+  "n_images": 11904,
+  "n_slots_per_image": 6,
+  "classes": [
+    "airplane",
+    "cat",
+    "dog"
+  ]
+}
