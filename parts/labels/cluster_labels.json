@@ -64,5 +64,17 @@
     "confidence": "Medium",
     "notes": "",
     "cluster_size": 1804
+  },
+  "17": {
+    "label": "mouth",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1918
+  },
+  "15": {
+    "label": "ear",
+    "confidence": "Medium",
+    "notes": "",
+    "cluster_size": 1557
   }
 }

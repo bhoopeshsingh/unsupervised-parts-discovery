@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from typing import Tuple, Dict, Any
 import numpy as np
 
-from .datasets import CIFAR10Subset
+from .data_classes import CIFAR10Subset, CustomImageFolder
 from .transforms import get_train_transforms, get_val_transforms
 
 
@@ -43,36 +43,63 @@ def create_dataloaders(
     val_transform = get_val_transforms(augmentation_config)
     
     # Create full training dataset
-    full_train_dataset = CIFAR10Subset(
-        root=data_config['root'],
-        train=True,
-        transform=train_transform,
-        download=data_config.get('download', True),
-        classes=data_config.get('classes', None)
-    )
+    if data_config['name'] == 'custom':
+        import os
+        full_train_dataset = CustomImageFolder(
+            root=os.path.join(data_config['custom_path'], 'train'),
+            transform=train_transform,
+            classes=data_config.get('classes', None)
+        )
+    else:
+        full_train_dataset = CIFAR10Subset(
+            root=data_config['root'],
+            train=True,
+            transform=train_transform,
+            download=data_config.get('download', True),
+            classes=data_config.get('classes', None)
+        )
     
-    # Split into train and validation
-    val_split = data_config.get('val_split', 0.2)
-    num_val = int(len(full_train_dataset) * val_split)
-    num_train = len(full_train_dataset) - num_val
     
-    train_dataset, val_dataset_temp = random_split(
-        full_train_dataset,
-        [num_train, num_val],
-        generator=torch.Generator().manual_seed(data_config.get('seed', 42))
-    )
-    
-    # Create validation dataset with validation transforms
-    # We need to update the transform for validation split
-    val_dataset = CIFAR10Subset(
-        root=data_config['root'],
-        train=True,
-        transform=val_transform,
-        download=False,
-        classes=data_config.get('classes', None)
-    )
-    # Use the same indices as val_dataset_temp
-    val_dataset.indices = [val_dataset.indices[i] for i in val_dataset_temp.indices]
+    if data_config['name'] == 'custom':
+        # For custom dataset with pre-split folders, we don't use random_split
+        # We just use the datasets directly
+        train_dataset = full_train_dataset
+        
+        import os
+        val_dataset = CustomImageFolder(
+            root=os.path.join(data_config['custom_path'], 'val'),
+            transform=val_transform,
+            classes=data_config.get('classes', None)
+        )
+        # However, prepare_data.py creates separate train/val folders.
+        # So we can just use the val folder directly.
+        # BUT, the random_split above splits the TRAIN folder into train/val.
+        # This is redundant if we have separate folders.
+        
+        # Let's adjust logic:
+        # If custom, we use the separate folders directly and ignore random_split
+        pass 
+    else:
+        # Split into train and validation
+        val_split = data_config.get('val_split', 0.2)
+        num_val = int(len(full_train_dataset) * val_split)
+        num_train = len(full_train_dataset) - num_val
+        
+        train_dataset, val_dataset_temp = random_split(
+            full_train_dataset,
+            [num_train, num_val],
+            generator=torch.Generator().manual_seed(data_config.get('seed', 42))
+        )
+        
+        val_dataset = CIFAR10Subset(
+            root=data_config['root'],
+            train=True,
+            transform=val_transform,
+            download=False,
+            classes=data_config.get('classes', None)
+        )
+        # Use the same indices as val_dataset_temp
+        val_dataset.indices = [val_dataset.indices[i] for i in val_dataset_temp.indices]
     
     print(f"\nDataset splits:")
     print(f"  Training: {len(train_dataset)} images")

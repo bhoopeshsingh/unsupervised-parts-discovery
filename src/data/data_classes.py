@@ -3,6 +3,8 @@
 import torch
 from torch.utils.data import Dataset, Subset
 from torchvision import datasets
+import os
+from PIL import Image
 import numpy as np
 from typing import List, Tuple, Optional
 
@@ -119,4 +121,81 @@ class CIFAR10Subset(Dataset):
             'label': label,
             'class_name': self.class_names[label],
             'original_idx': self.indices[idx]
+        }
+
+
+class CustomImageFolder(Dataset):
+    """
+    Custom dataset for loading images from a folder structure.
+    Expected structure: root/class_name/image.png
+    """
+    
+    def __init__(
+        self,
+        root: str,
+        transform: Optional[object] = None,
+        classes: Optional[List[str]] = None
+    ):
+        self.root = root
+        self.transform = transform
+        self.classes = classes
+        
+        # Find all images
+        self.samples = []
+        self.class_to_idx = {}
+        
+        if classes is not None:
+            self.class_to_idx = {c: i for i, c in enumerate(classes)}
+            for class_name in classes:
+                class_dir = os.path.join(root, class_name)
+                if not os.path.exists(class_dir):
+                    print(f"Warning: Class directory not found: {class_dir}")
+                    continue
+                    
+                for fname in os.listdir(class_dir):
+                    if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        path = os.path.join(class_dir, fname)
+                        self.samples.append((path, self.class_to_idx[class_name]))
+        else:
+            # Auto-discover classes
+            class_dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
+            class_dirs.sort()
+            self.class_to_idx = {c: i for i, c in enumerate(class_dirs)}
+            self.classes = class_dirs
+            
+            for class_name in class_dirs:
+                class_dir = os.path.join(root, class_name)
+                for fname in os.listdir(class_dir):
+                    if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        path = os.path.join(class_dir, fname)
+                        self.samples.append((path, self.class_to_idx[class_name]))
+        
+        print(f"Found {len(self.samples)} images across {len(self.class_to_idx)} classes")
+        for class_name in self.class_to_idx:
+            count = sum(1 for _, label in self.samples if label == self.class_to_idx[class_name])
+            print(f"  - {class_name}: {count} images")
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        path, label = self.samples[idx]
+        
+        # Load image
+        image = Image.open(path).convert('RGB')
+        
+        if self.transform is not None:
+            image = self.transform(image)
+            
+        return image, label
+
+    def get_image_with_metadata(self, idx: int) -> dict:
+        path, label = self.samples[idx]
+        image, _ = self[idx]
+        return {
+            'image': image,
+            'label': label,
+            'class_name': self.classes[label] if self.classes else str(label),
+            'original_idx': idx,
+            'path': path
         }

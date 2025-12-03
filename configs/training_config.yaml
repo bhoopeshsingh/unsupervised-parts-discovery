@@ -13,7 +13,7 @@ part_discovery:
     eta_min: 0.00001
   
   # Checkpointing
-  checkpoint_dir: "./checkpoints/part_discovery"
+  checkpoint_dir: "../checkpoints/part_discovery"
   save_every: 5
   save_best: true
   
@@ -33,7 +33,7 @@ classification:
     gamma: 0.1
   
   # Checkpointing
-  checkpoint_dir: "./checkpoints/classification"
+  checkpoint_dir: "../checkpoints/classification"
   save_every: 10
   save_best: true
   
@@ -46,10 +46,10 @@ wandb:
   entity: null  # Set to your W&B username
   mode: "online"  # "online", "offline", or "disabled"
   tags:
-    - "cifar10"
+    - "custom-128"
     - "slot-attention"
-    - "4-classes"
-  notes: "Initial experiments with 4-class CIFAR-10 subset"
+    - "3-classes"
+  notes: "Experiments with 128x128 custom dataset (airplane, cat, dog)"
 
 # Early stopping
 early_stopping:

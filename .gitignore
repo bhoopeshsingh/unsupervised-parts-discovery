@@ -40,6 +40,7 @@ Thumbs.db
 .ipynb_checkpoints/
 *.ipynb
 !notebooks/phase2_pipeline_test.ipynb
+!notebooks/unsupervised_part_discovery_analysis.ipynb
 
 # Plots and visualizations
 *.png

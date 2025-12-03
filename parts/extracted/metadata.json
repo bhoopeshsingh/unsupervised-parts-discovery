@@ -1,13 +1,13 @@
 {
-  "num_images": 11904,
+  "num_images": 1200,
   "num_slots": 6,
   "slot_dim": 128,
   "mask_size": [
-    32,
-    32
+    128,
+    128
   ],
-  "checkpoint_epoch": 28,
-  "checkpoint_loss": 0.49693957809358835,
+  "checkpoint_epoch": "unknown",
+  "checkpoint_loss": 0.0,
   "classes": [
     "airplane",
     "cat",
@@ -40,7 +40,7 @@
           512
         ],
         "output_channels": 3,
-        "output_size": 32
+        "output_size": 128
       },
       "loss": {
         "reconstruction_weight": 1.0,
@@ -53,7 +53,7 @@
         512,
         256
       ],
-      "num_classes": 4,
+      "num_classes": 3,
       "dropout": 0.3
     },
     "device": "mps"

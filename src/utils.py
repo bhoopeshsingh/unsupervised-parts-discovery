@@ -99,6 +99,10 @@ def load_checkpoint(
     device: torch.device = None
 ) -> Dict[str, Any]:
     """Load model checkpoint"""
+    if not Path(checkpoint_path).exists():
+        print(f"Checkpoint not found at {checkpoint_path}. Starting from scratch.")
+        return None
+        
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     

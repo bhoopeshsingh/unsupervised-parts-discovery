@@ -193,8 +193,24 @@ class SpatialBroadcastDecoder(nn.Module):
         decoder_input = torch.cat([slots, pos], dim=-1)  # [B, num_slots, H, W, D+2]
         
         # Decode
-        decoder_input = decoder_input.reshape(B * num_slots * H * W, -1)
-        decoder_output = self.decoder(decoder_input)
+        # decoder_input = decoder_input.reshape(B * num_slots * H * W, -1)
+        # decoder_output = self.decoder(decoder_input)
+        # decoder_output = decoder_output.reshape(B, num_slots, H, W, -1)
+        
+        # Chunked decoding to avoid OOM
+        # Total elements: B * num_slots * H * W
+        # With B=32, S=6, H=128, W=128 -> 3.1M vectors
+        # Each vector is ~512 floats (hidden dim) -> 6GB memory
+        
+        flat_input = decoder_input.reshape(-1, decoder_input.shape[-1])
+        chunk_size = 500000  # Process 500k vectors at a time (~1GB output)
+        output_chunks = []
+        
+        for i in range(0, flat_input.shape[0], chunk_size):
+            chunk = flat_input[i:i + chunk_size]
+            output_chunks.append(self.decoder(chunk))
+            
+        decoder_output = torch.cat(output_chunks, dim=0)
         decoder_output = decoder_output.reshape(B, num_slots, H, W, -1)
         
         # Split into RGB and masks

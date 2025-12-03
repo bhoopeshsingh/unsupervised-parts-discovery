@@ -1,6 +1,6 @@
 """Data loading and preprocessing modules"""
 
-from .datasets import CIFAR10Subset
+from .data_classes import CIFAR10Subset
 from .transforms import get_train_transforms, get_val_transforms
 from .loaders import create_dataloaders
 
