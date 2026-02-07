@@ -1,0 +1,63 @@
+{
+  "num_images": 1600,
+  "num_slots": 8,
+  "slot_dim": 128,
+  "mask_size": [
+    128,
+    128
+  ],
+  "checkpoint_epoch": "none",
+  "checkpoint_loss": 0.0,
+  "classes": [
+    "airplane",
+    "cat",
+    "dog",
+    "bird"
+  ],
+  "model_config": {
+    "backbone": {
+      "name": "resnet50",
+      "pretrained": true,
+      "freeze_early_layers": true,
+      "use_layer4": false,
+      "feature_dim": 1024
+    },
+    "slot_attention": {
+      "num_slots": 8,
+      "slot_dim": 128,
+      "hidden_dim": 256,
+      "num_iterations": 7,
+      "encoder": {
+        "input_dim": 1024,
+        "output_dim": 128,
+        "hidden_dims": [
+          512,
+          256
+        ]
+      },
+      "decoder": {
+        "input_dim": 128,
+        "hidden_dims": [
+          256,
+          512
+        ],
+        "output_channels": 3,
+        "output_size": 128
+      },
+      "loss": {
+        "reconstruction_weight": 1.0,
+        "diversity_weight": 0.1
+      }
+    },
+    "classifier": {
+      "input_dim": 1024,
+      "hidden_dims": [
+        512,
+        256
+      ],
+      "num_classes": 3,
+      "dropout": 0.3
+    },
+    "device": "mps"
+  }
+}
