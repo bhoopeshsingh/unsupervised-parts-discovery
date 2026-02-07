@@ -61,8 +61,10 @@ def main():
         axes[row, col].axis('off')
     
     plt.tight_layout()
-    plt.savefig('data_samples.png', dpi=150, bbox_inches='tight')
-    print("\nSaved visualization to: data_samples.png")
+    plt.tight_layout()
+    # plt.savefig('data_samples.png', dpi=150, bbox_inches='tight')
+    # print("\nSaved visualization to: data_samples.png")
+    print("Skipping save to data_samples.png (Notebook mode)")
     plt.show()
     
     # Per-class distribution

@@ -13,7 +13,7 @@ from src.utils import load_config, get_device, load_checkpoint
 class InferencePipeline:
     def __init__(self, 
                  model_config_path='configs/model_config.yaml',
-                 checkpoint_path='checkpoints/part_discovery/best_model.pt',
+                 checkpoint_path='checkpoints/part_discovery/checkpoint_epoch_30.pt',
                  clusters_dir='parts/clusters'):
         
         self.device = get_device('auto')
@@ -22,8 +22,19 @@ class InferencePipeline:
         
         # Load Models
         print("Loading models...")
+        # Use config resolution (128x128)
+        # self.model_config['slot_attention']['decoder']['output_size'] = 32
+        
         self.backbone = ResNetBackbone.from_config(self.model_config['backbone'])
         self.slot_model = SlotAttentionModel.from_config(self.model_config)
+        
+        # Checkpoint is likely 32x32, but config is 128x128
+        # We need to handle this mismatch if we want to run the old checkpoint
+        # But we can't easily check the checkpoint before loading...
+        # Actually we can catch the error, but better to just override if we know we are using the old checkpoint
+        
+        # Override for compatibility with old checkpoint if needed
+        # self.model_config['slot_attention']['decoder']['output_size'] = 32
         
         # Load Checkpoint
         # Handle the shared state dict logic we discovered earlier
@@ -34,7 +45,15 @@ class InferencePipeline:
         slot_dict = {k.replace('slot_model.', ''): v for k, v in state_dict.items() if k.startswith('slot_model.')}
         
         self.backbone.load_state_dict(backbone_dict)
-        self.slot_model.load_state_dict(slot_dict)
+        
+        # Handle potential resolution mismatch in checkpoint (e.g. loading 32x32 checkpoint for 128x128 model)
+        if 'decoder.pos_grid' in slot_dict:
+            if slot_dict['decoder.pos_grid'].shape != self.slot_model.decoder.pos_grid.shape:
+                print(f"Ignoring checkpoint pos_grid due to shape mismatch: {slot_dict['decoder.pos_grid'].shape} vs {self.slot_model.decoder.pos_grid.shape}")
+                del slot_dict['decoder.pos_grid']
+        
+        # Use strict=False to allow missing pos_grid if we deleted it
+        self.slot_model.load_state_dict(slot_dict, strict=False)
         
         self.backbone.to(self.device).eval()
         self.slot_model.to(self.device).eval()
@@ -43,8 +62,9 @@ class InferencePipeline:
         self.load_cluster_data()
         
         # Transforms
+        img_size = self.model_config['slot_attention']['decoder']['output_size']
         self.transform = transforms.Compose([
-            transforms.Resize((32, 32)),
+            transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=[0.4914, 0.4822, 0.4465],
@@ -102,6 +122,17 @@ class InferencePipeline:
             print("WARNING: No centroids found in metadata!")
             self.centroids = None
 
+    def load_labels(self):
+        """Reload user labels from disk"""
+        labels_path = Path('parts/labels/cluster_labels.json')
+        if labels_path.exists():
+            with open(labels_path, 'r') as f:
+                self.user_labels = json.load(f)
+            print(f"Loaded {len(self.user_labels)} labels from {labels_path}")
+        else:
+            self.user_labels = {}
+            print(f"Labels file not found at {labels_path}")
+
     def process_image(self, image):
         """
         Run inference on a single image
@@ -112,6 +143,9 @@ class InferencePipeline:
         Returns:
             dict with results
         """
+        # Reload labels to ensure we have the latest updates
+        self.load_labels()
+        
         # Handle different input types
         if not isinstance(image, Image.Image):
             try:
@@ -129,8 +163,8 @@ class InferencePipeline:
             
         # Post-process
         slots = slots.cpu().numpy()[0] # [num_slots, dim]
-        masks = masks.cpu().numpy()[0] # [num_slots, 32, 32]
-        recon = recon.cpu().numpy()[0].transpose(1, 2, 0) # [32, 32, 3]
+        masks = masks.cpu().numpy()[0] # [num_slots, H, W]
+        recon = recon.cpu().numpy()[0].transpose(1, 2, 0) # [H, W, 3]
         
         # Denormalize recon for display
         recon = (recon - recon.min()) / (recon.max() - recon.min())
@@ -153,6 +187,9 @@ class InferencePipeline:
                 # Get semantic label
                 label_info = self.user_labels.get(str(global_id), {})
                 semantic_label = label_info.get('label', f"Cluster {global_id}")
+                
+                # Debug print
+                print(f"Slot {i}: Cluster {global_id}, Label: {semantic_label}, Found in dict: {str(global_id) in self.user_labels}")
                 
                 results.append({
                     'slot_idx': i,

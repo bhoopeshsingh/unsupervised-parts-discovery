@@ -116,8 +116,14 @@ def plot_cooccurrence_heatmap(cooccurrence, class_names, semantic_labels, save_p
     ax.set_title('Cluster-to-Class Co-occurrence Matrix', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"Saved cooccurrence heatmap: {save_path}")
+    
+    if save_path:
+        print(f"Skipping save to {save_path} (Notebook mode)")
+        plt.show()
+    else:
+        plt.show()
+    # plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    # print(f"Saved cooccurrence heatmap: {save_path}")
     plt.close()
 
 

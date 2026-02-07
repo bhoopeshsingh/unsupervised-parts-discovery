@@ -136,10 +136,13 @@ def visualize_class_consistency(
             
     plt.tight_layout()
     save_path = save_dir / f'consistency_{class_name}.png'
-    plt.savefig(save_path, dpi=100, bbox_inches='tight')
+    
+    print(f"Skipping save to {save_path} (Notebook mode)")
+    plt.show()
+    # plt.savefig(save_path, dpi=100, bbox_inches='tight')
     plt.close()
     
-    print(f"Saved consistency visualization to: {save_path}")
+    # print(f"Saved consistency visualization to: {save_path}")
 
 def main():
     parser = argparse.ArgumentParser()

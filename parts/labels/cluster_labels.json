@@ -1,80 +1,20 @@
 {
-  "5": {
+  "0": {
     "label": "wing",
     "confidence": "Medium",
     "notes": "",
-    "cluster_size": 1451
-  },
-  "0": {
-    "label": "head",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1295
-  },
-  "2": {
-    "label": "taxi",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1579
-  },
-  "8": {
-    "label": "engine",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 2107
-  },
-  "7": {
-    "label": "wheels",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1866
+    "cluster_size": 564
   },
   "1": {
-    "label": "wing_edge",
+    "label": "tail",
     "confidence": "Medium",
     "notes": "",
-    "cluster_size": 1992
+    "cluster_size": 534
   },
-  "16": {
-    "label": "leg",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1792
-  },
-  "40": {
-    "label": "face",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1672
-  },
-  "39": {
+  "10": {
     "label": "eye",
     "confidence": "Medium",
     "notes": "",
-    "cluster_size": 2131
-  },
-  "20": {
-    "label": "eye",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1527
-  },
-  "19": {
-    "label": "face",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1804
-  },
-  "17": {
-    "label": "mouth",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1918
-  },
-  "15": {
-    "label": "ear",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 1557
+    "cluster_size": 298
   }
 }

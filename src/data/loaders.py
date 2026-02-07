@@ -71,14 +71,6 @@ def create_dataloaders(
             transform=val_transform,
             classes=data_config.get('classes', None)
         )
-        # However, prepare_data.py creates separate train/val folders.
-        # So we can just use the val folder directly.
-        # BUT, the random_split above splits the TRAIN folder into train/val.
-        # This is redundant if we have separate folders.
-        
-        # Let's adjust logic:
-        # If custom, we use the separate folders directly and ignore random_split
-        pass 
     else:
         # Split into train and validation
         val_split = data_config.get('val_split', 0.2)

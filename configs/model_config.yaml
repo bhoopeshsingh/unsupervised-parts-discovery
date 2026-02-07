@@ -5,18 +5,19 @@ backbone:
   name: "resnet50"
   pretrained: true
   freeze_early_layers: true  # Changed to TRUE to stabilize features
-  feature_dim: 2048  # ResNet50 output dimension
+  use_layer4: false  # Use Layer3 for better spatial resolution (8x8 vs 4x4)
+  feature_dim: 1024  # ResNet50 Layer3 output dimension (changed from 2048)
 
 # Slot Attention for Part Discovery
 slot_attention:
-  num_slots: 6  # Reduced from 8 to simplify the task
+  num_slots: 8 
   slot_dim: 128  # Dimension of each slot
   hidden_dim: 256  # Hidden dimension for MLP
   num_iterations: 7  # Increased from 5
   
   # Encoder (processes backbone features)
   encoder:
-    input_dim: 2048  # From ResNet50
+    input_dim: 1024  # From ResNet50 Layer3 (changed from 2048)
     output_dim: 128  # Match slot_dim
     hidden_dims: [512, 256]
   
@@ -34,7 +35,7 @@ slot_attention:
 
 # Classification Head
 classifier:
-  input_dim: 2048  # From ResNet50
+  input_dim: 1024  # From ResNet50 Layer3 (changed from 2048)
   hidden_dims: [512, 256]
   num_classes: 3  # airplane, cat, dog
   dropout: 0.3

@@ -4,7 +4,8 @@ import sys
 sys.path.append('.')
 
 import torch
-import wandb
+import mlflow
+import time
 from pathlib import Path
 
 from src.data.loaders import create_dataloaders
@@ -32,21 +33,39 @@ def main():
         **training_config
     }
     
-    # Initialize W&B
-    wandb_config = training_config['wandb']
-    if wandb_config['mode'] != 'disabled':
-        # Create new run with different config for classification
-        wandb.init(
-            project=wandb_config['project'],
-            entity=wandb_config.get('entity'),
-            config=full_config,
-            tags=['classification'] + wandb_config.get('tags', []),
-            notes='Classification training',
-            mode=wandb_config['mode']
-        )
-        use_wandb = True
+    # Initialize MLFlow
+    mlflow_config = training_config['mlflow']
+    mlflow.set_tracking_uri(mlflow_config.get('tracking_uri', 'file:./mlruns'))
+    mlflow.set_experiment(mlflow_config['experiment_name'])
+    
+    if mlflow_config.get('enabled', True):
+        run_name = f"classifier_{time.strftime('%Y%m%d_%H%M%S')}"
+        mlflow.start_run(run_name=run_name)
+        
+        # Log all hyperparameters (flatten nested dicts)
+        def flatten_dict(d, parent_key='', sep='.'):
+            items = []
+            for k, v in d.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(flatten_dict(v, new_key, sep=sep).items())
+                elif isinstance(v, (int, float, str, bool)):
+                    items.append((new_key, v))
+            return dict(items)
+        
+        mlflow.log_params(flatten_dict(model_config))
+        mlflow.log_params({f"train.{k}": v for k, v in flatten_dict(training_config['classification']).items()})
+        
+        # Set tags
+        for key, value in mlflow_config.get('tags', {}).items():
+            mlflow.set_tag(key, value)
+        mlflow.set_tag('task', 'classification')
+        if 'notes' in mlflow_config:
+            mlflow.set_tag('notes', mlflow_config['notes'])
+        
+        use_tracking = True
     else:
-        use_wandb = False
+        use_tracking = False
     
     # Create dataloaders
     print("\nPreparing datasets...")
@@ -67,15 +86,15 @@ def main():
         classifier=classifier,
         device=device,
         config=full_config,
-        use_wandb=use_wandb
+        use_tracking=use_tracking
     )
     
     # Train
     trainer.train(train_loader, val_loader)
     
-    # Finish W&B run
-    if use_wandb:
-        wandb.finish()
+    # Finish MLFlow run
+    if use_tracking:
+        mlflow.end_run()
     
     print("\nClassification training completed!")
     print(f"Best model saved at: {trainer.checkpoint_dir / 'best_model.pt'}")

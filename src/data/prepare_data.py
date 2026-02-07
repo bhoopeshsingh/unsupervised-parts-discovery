@@ -1,8 +1,3 @@
-"""
-Script to prepare high-resolution data for parts discovery.
-Downloads images from Hugging Face (ImageNet subset) and organizes them into folders.
-"""
-
 import os
 import argparse
 from pathlib import Path
@@ -13,7 +8,7 @@ import shutil
 
 def prepare_imagenet_subset(
     output_dir: str,
-    num_images_per_class: int = 5000,
+    num_images_per_class: int = 500,
     seed: int = 42
 ):
     """
@@ -23,6 +18,8 @@ def prepare_imagenet_subset(
     Classes:
     - Airplane: 'airliner' (index 404)
     - Cat: 'tabby' (281), 'tiger_cat' (282)
+    - Dog: Beagle (162), Golden (207), Lab (208), Shepherd (235), Pug (254)
+    - Bird: Goldfinch (11), House finch (12), Junco (13), Indigo bunting (14), Robin (15)
     """
     print(f"Preparing data in {output_dir}...")
     output_path = Path(output_dir)
@@ -38,7 +35,13 @@ def prepare_imagenet_subset(
         207: 'dog',  # Golden retriever
         208: 'dog',  # Labrador retriever
         235: 'dog',  # German shepherd
-        254: 'dog'   # Pug
+        254: 'dog',  # Pug
+        # Birds (New)
+        11: 'bird', # Goldfinch
+        12: 'bird', # House finch
+        13: 'bird', # Junco
+        14: 'bird', # Indigo bunting
+        15: 'bird'  # Robin
     }
     
     target_indices = set(class_mapping.keys())

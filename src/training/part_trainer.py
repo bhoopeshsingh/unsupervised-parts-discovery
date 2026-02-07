@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from tqdm import tqdm
 from typing import Dict, Any, Optional
-import wandb
+import mlflow
 
 from ..models.backbone import ResNetBackbone
 from ..models.part_discovery.slot_attention import SlotAttentionModel
@@ -25,13 +25,13 @@ class PartDiscoveryTrainer:
         slot_model: SlotAttentionModel,
         device: torch.device,
         config: Dict[str, Any],
-        use_wandb: bool = True
+        use_tracking: bool = True
     ):
         self.backbone = backbone.to(device)
         self.slot_model = slot_model.to(device)
         self.device = device
         self.config = config
-        self.use_wandb = use_wandb
+        self.use_tracking = use_tracking
         
         # Loss weights
         loss_config = config['slot_attention']['loss']
@@ -170,14 +170,13 @@ class PartDiscoveryTrainer:
             
             # Logging
             if batch_idx % self.log_every == 0:
-                if self.use_wandb:
-                    wandb.log({
-                        'train/total_loss': losses['total_loss'].item(),
-                        'train/recon_loss': losses['recon_loss'].item(),
-                        'train/diversity_loss': losses['diversity_loss'].item(),
-                        'train/lr': self.optimizer.param_groups[0]['lr'],
-                        'global_step': self.global_step
-                    })
+                if self.use_tracking:
+                    mlflow.log_metrics({
+                        'train_total_loss': losses['total_loss'].item(),
+                        'train_recon_loss': losses['recon_loss'].item(),
+                        'train_diversity_loss': losses['diversity_loss'].item(),
+                        'learning_rate': self.optimizer.param_groups[0]['lr']
+                    }, step=self.global_step)
                 
                 pbar.set_postfix({
                     'loss': f"{losses['total_loss'].item():.4f}",
@@ -235,13 +234,12 @@ class PartDiscoveryTrainer:
             if val_loader is not None:
                 val_losses = self.validate(val_loader)
                 
-                if self.use_wandb:
-                    wandb.log({
-                        'val/total_loss': val_losses['total_loss'],
-                        'val/recon_loss': val_losses['recon_loss'],
-                        'val/diversity_loss': val_losses['diversity_loss'],
-                        'epoch': epoch
-                    })
+                if self.use_tracking:
+                    mlflow.log_metrics({
+                        'val_total_loss': val_losses['total_loss'],
+                        'val_recon_loss': val_losses['recon_loss'],
+                        'val_diversity_loss': val_losses['diversity_loss']
+                    }, step=epoch)
                 
                 print(f"\nEpoch {epoch}/{self.epochs}:")
                 print(f"  Train Loss: {train_losses['total_loss']:.4f}")

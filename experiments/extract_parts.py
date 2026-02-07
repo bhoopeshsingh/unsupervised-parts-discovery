@@ -264,8 +264,8 @@ def main():
         'num_slots': parts_data['slots'].shape[1],
         'slot_dim': parts_data['slots'].shape[2],
         'mask_size': list(parts_data['masks'].shape[2:]),
-        'checkpoint_epoch': checkpoint.get('epoch', 'unknown'),
-        'checkpoint_loss': float(checkpoint.get('loss', 0)),
+        'checkpoint_epoch': checkpoint.get('epoch', 'unknown') if checkpoint else 'none',
+        'checkpoint_loss': float(checkpoint.get('loss', 0)) if checkpoint else 0.0,
         'classes': data_config['dataset']['classes'],
         'model_config': model_config
     }

@@ -104,7 +104,22 @@ def load_checkpoint(
         return None
         
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    state_dict = checkpoint['model_state_dict']
+    
+    # Handle potential shape mismatches (e.g. pos_grid when changing resolution)
+    model_state = model.state_dict()
+    keys_to_remove = []
+    
+    for k, v in state_dict.items():
+        if k in model_state:
+            if v.shape != model_state[k].shape:
+                print(f"Shape mismatch for {k}: checkpoint {v.shape} != model {model_state[k].shape}. Ignoring.")
+                keys_to_remove.append(k)
+                
+    for k in keys_to_remove:
+        del state_dict[k]
+        
+    model.load_state_dict(state_dict, strict=False)
     
     if optimizer and 'optimizer_state_dict' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

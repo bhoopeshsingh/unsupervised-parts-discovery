@@ -301,7 +301,7 @@ def render_labeling_page():
     
     # Display samples
     st.subheader("Sample Parts from Cluster")
-    num_samples = st.slider("Number of samples to display", 5, 30, 15)
+    num_samples = st.select_slider("Number of samples to display", options=[10, 25, 50], value=10)
     
     samples = get_cluster_samples(selected_cluster, data, max_samples=num_samples)
     display_cluster_samples(samples, class_names, cols=5)
@@ -373,6 +373,19 @@ def render_labeling_page():
             file_name="cluster_labels.json",
             mime="application/json"
         )
+    
+    # Reset Labels Button
+    st.markdown("---")
+    st.header("⚠️ Reset All Labels")
+    if st.button("Reset All Labels", type="secondary"):
+        labels_path = Path("parts/labels/cluster_labels.json")
+        if labels_path.exists():
+            labels_path.unlink()
+            st.cache_data.clear()
+            st.success("All labels have been reset!")
+            st.rerun()
+        else:
+            st.info("No labels found to reset.")
     
     # Show labeled clusters summary
     if cluster_labels_dict:
@@ -468,7 +481,9 @@ def render_inference_page():
                 
                 with columns[col_idx]:
                     st.image(overlay, caption=f"{part['label']}\n(Cluster {part['cluster_id']})", clamp=True)
-                    st.progress(part['score'])
+                    # Clamp score to [0, 1] for progress bar
+                    score = max(0.0, min(1.0, part['score']))
+                    st.progress(score)
 
 def main():
     st.sidebar.title("Navigation")

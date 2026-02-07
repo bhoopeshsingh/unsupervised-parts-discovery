@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from tqdm import tqdm
 from typing import Dict, Any, Optional
-import wandb
+import mlflow
 
 from ..models.backbone import ResNetBackbone
 from ..models.classifier import Classifier
@@ -24,13 +24,13 @@ class ClassifierTrainer:
         classifier: Classifier,
         device: torch.device,
         config: Dict[str, Any],
-        use_wandb: bool = True
+        use_tracking: bool = True
     ):
         self.backbone = backbone.to(device)
         self.classifier = classifier.to(device)
         self.device = device
         self.config = config
-        self.use_wandb = use_wandb
+        self.use_tracking = use_tracking
         
         # Training config
         train_config = config['classification']
@@ -116,13 +116,12 @@ class ClassifierTrainer:
             # Logging
             if batch_idx % self.log_every == 0:
                 acc = 100.0 * correct / total
-                if self.use_wandb:
-                    wandb.log({
-                        'train/loss': loss.item(),
-                        'train/accuracy': acc,
-                        'train/lr': self.optimizer.param_groups[0]['lr'],
-                        'global_step': self.global_step
-                    })
+                if self.use_tracking:
+                    mlflow.log_metrics({
+                        'train_loss': loss.item(),
+                        'train_accuracy': acc,
+                        'learning_rate': self.optimizer.param_groups[0]['lr']
+                    }, step=self.global_step)
                 
                 pbar.set_postfix({
                     'loss': f"{loss.item():.4f}",
@@ -201,16 +200,15 @@ class ClassifierTrainer:
             if val_loader is not None:
                 val_metrics = self.validate(val_loader)
                 
-                if self.use_wandb:
+                if self.use_tracking:
                     log_dict = {
-                        'val/loss': val_metrics['loss'],
-                        'val/accuracy': val_metrics['accuracy'],
-                        'epoch': epoch
+                        'val_loss': val_metrics['loss'],
+                        'val_accuracy': val_metrics['accuracy']
                     }
                     # Log per-class accuracy
                     for i, acc in enumerate(val_metrics['class_accuracy']):
-                        log_dict[f'val/class_{i}_accuracy'] = acc
-                    wandb.log(log_dict)
+                        log_dict[f'val_class_{i}_accuracy'] = acc
+                    mlflow.log_metrics(log_dict, step=epoch)
                 
                 print(f"\nEpoch {epoch}/{self.epochs}:")
                 print(f"  Train Loss: {train_metrics['loss']:.4f} | Train Acc: {train_metrics['accuracy']:.2f}%")
