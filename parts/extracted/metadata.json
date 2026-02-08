@@ -1,18 +1,24 @@
 {
-  "num_images": 1600,
-  "num_slots": 8,
-  "slot_dim": 128,
-  "mask_size": [
-    128,
-    128
-  ],
-  "checkpoint_epoch": "none",
-  "checkpoint_loss": 0.0,
+  "num_parts": 22881,
+  "num_parts_before_filtering": 32000,
+  "filtering_stats": {
+    "total_input": 32000,
+    "total_valid": 22881,
+    "total_rejected": 9119,
+    "rejection_rate": 0.28496875,
+    "rejection_reasons": {
+      "too_small_or_large": 0,
+      "scattered_attention": 0,
+      "blank_region": 9119,
+      "single_color": 0,
+      "bbox_too_small": 0
+    }
+  },
+  "num_images": 4000,
+  "checkpoint_epoch": 10,
+  "checkpoint_loss": 0.7557374482154846,
   "classes": [
-    "airplane",
-    "cat",
-    "dog",
-    "bird"
+    "cat"
   ],
   "model_config": {
     "backbone": {
@@ -26,7 +32,7 @@
       "num_slots": 8,
       "slot_dim": 128,
       "hidden_dim": 256,
-      "num_iterations": 7,
+      "num_iterations": 8,
       "encoder": {
         "input_dim": 1024,
         "output_dim": 128,
@@ -46,7 +52,9 @@
       },
       "loss": {
         "reconstruction_weight": 1.0,
-        "diversity_weight": 0.1
+        "diversity_weight": 0.1,
+        "spatial_coherence_weight": 1.5,
+        "size_regularization_weight": 0.5
       }
     },
     "classifier": {
@@ -59,5 +67,12 @@
       "dropout": 0.3
     },
     "device": "mps"
+  },
+  "feature_dims": {
+    "total": 2184,
+    "slot": 128,
+    "visual": 2048,
+    "spatial": 5,
+    "shape": 3
   }
 }

@@ -1,20 +1,20 @@
 {
-  "0": {
-    "label": "wing",
-    "confidence": "Medium",
+  "12": {
+    "label": "ear",
+    "confidence": "High",
     "notes": "",
-    "cluster_size": 564
-  },
-  "1": {
-    "label": "tail",
-    "confidence": "Medium",
-    "notes": "",
-    "cluster_size": 534
+    "cluster_size": 760
   },
   "10": {
     "label": "eye",
-    "confidence": "Medium",
+    "confidence": "High",
     "notes": "",
-    "cluster_size": 298
+    "cluster_size": 615
+  },
+  "0": {
+    "label": "leg",
+    "confidence": "High",
+    "notes": "",
+    "cluster_size": 1424
   }
 }

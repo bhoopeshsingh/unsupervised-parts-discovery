@@ -30,8 +30,9 @@ def load_clustering_data(parts_dir, clusters_dir):
     
     # Load parts data
     masks = np.load(parts_dir / 'masks.npy')
-    labels = np.load(parts_dir / 'labels.npy')
-    
+    labels_path = parts_dir / 'labels.npy'
+    labels = np.load(labels_path) if labels_path.exists() else None
+
     with open(parts_dir / 'metadata.json', 'r') as f:
         parts_metadata = json.load(f)
     
@@ -49,6 +50,13 @@ def load_clustering_data(parts_dir, clusters_dir):
     with open(clusters_dir / 'cluster_metadata.json', 'r') as f:
         cluster_metadata = json.load(f)
     
+    # Extract class names from parts metadata
+    class_names = parts_metadata.get('classes', ['unknown'])
+
+    # Compute n_clusters and n_parts from actual data
+    n_clusters = len(cluster_metadata)
+    n_parts = len(masks)
+
     return {
         'masks': masks,
         'images': images,
@@ -58,7 +66,10 @@ def load_clustering_data(parts_dir, clusters_dir):
         'part_to_image': part_to_image,
         'part_to_slot': part_to_slot,
         'part_to_class': part_to_class,
-        'cluster_metadata': cluster_metadata
+        'cluster_metadata': cluster_metadata,
+        'class_names': class_names,
+        'n_clusters': n_clusters,
+        'n_parts': n_parts
     }
 
 @st.cache_data
@@ -98,12 +109,12 @@ def get_cluster_samples(cluster_id, data, max_samples=20):
         slot_idx = data['part_to_slot'][part_idx]
         class_label = data['part_to_class'][part_idx]
         
-        # Get the mask for this part
-        mask = data['masks'][image_idx, slot_idx]
-        
+        # Get the mask for this part - new format: masks[part_idx] directly
+        mask = data['masks'][part_idx]
+
         # Get image if available
         image = None
-        if data['images'] is not None:
+        if data['images'] is not None and image_idx < len(data['images']):
             image = data['images'][image_idx]
         
         samples.append({
@@ -215,11 +226,11 @@ def render_labeling_page():
     # Load existing labels
     cluster_labels_dict = load_existing_labels(labels_file)
     
-    # Display statistics
-    n_clusters = data['cluster_metadata']['n_clusters']
-    n_parts = data['cluster_metadata']['n_parts']
-    class_names = data['cluster_metadata']['classes']
-    
+    # Display statistics - use computed values from data dict
+    n_clusters = data['n_clusters']
+    n_parts = data['n_parts']
+    class_names = data['class_names']
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📊 Statistics")
     st.sidebar.metric("Total Clusters", n_clusters)

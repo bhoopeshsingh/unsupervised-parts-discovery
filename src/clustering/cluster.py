@@ -1,10 +1,13 @@
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score, davies_bouldin_score
+from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass
 
 def determine_optimal_k(features, k_range=(10, 40), n_init=10, random_state=42):
     """
@@ -222,6 +225,290 @@ def cluster_parts_per_class(features, class_labels, class_names, k_range=(5, 20)
         current_global_id_offset += optimal_k
         
     return global_cluster_labels, cluster_metadata, metrics
+
+
+# =============================================================================
+# Enhanced Spatially-Aware Clustering
+# =============================================================================
+
+@dataclass
+class FeatureWeights:
+    """Weights for combining different feature types."""
+    visual: float = 1.0      # ResNet visual features
+    spatial: float = 0.3     # Position, size, coverage
+    shape: float = 0.5       # Aspect ratio, compactness, edge density
+    slot: float = 0.5        # Slot attention learned features
+    
+    def to_dict(self) -> Dict[str, float]:
+        return {
+            'visual': self.visual,
+            'spatial': self.spatial,
+            'shape': self.shape,
+            'slot': self.slot
+        }
+
+
+def split_rich_descriptors(
+    combined_features: np.ndarray,
+    slot_dim: int = 128,
+    visual_dim: int = 2048,
+    spatial_dim: int = 5,
+    shape_dim: int = 3
+) -> Dict[str, np.ndarray]:
+    """
+    Split combined feature vectors into component types.
+    
+    Args:
+        combined_features: Combined features [N, total_dim]
+        slot_dim: Dimension of slot features
+        visual_dim: Dimension of visual features
+        spatial_dim: Dimension of spatial features
+        shape_dim: Dimension of shape features
+        
+    Returns:
+        Dictionary with 'slot', 'visual', 'spatial', 'shape' arrays
+    """
+    idx = 0
+    result = {}
+    
+    result['slot'] = combined_features[:, idx:idx+slot_dim]
+    idx += slot_dim
+    
+    result['visual'] = combined_features[:, idx:idx+visual_dim]
+    idx += visual_dim
+    
+    result['spatial'] = combined_features[:, idx:idx+spatial_dim]
+    idx += spatial_dim
+    
+    result['shape'] = combined_features[:, idx:idx+shape_dim]
+    
+    return result
+
+
+def combine_weighted_features(
+    feature_components: Dict[str, np.ndarray],
+    weights: FeatureWeights = None
+) -> np.ndarray:
+    """
+    Combine feature components with weights for clustering.
+    
+    Args:
+        feature_components: Dict with 'slot', 'visual', 'spatial', 'shape' arrays
+        weights: Feature weights
+        
+    Returns:
+        Combined weighted features [N, total_weighted_dim]
+    """
+    weights = weights or FeatureWeights()
+    
+    # Normalize each component separately
+    scaler = StandardScaler()
+    
+    weighted_parts = []
+    
+    for name, weight in weights.to_dict().items():
+        if name in feature_components and weight > 0:
+            features = feature_components[name]
+            # Standardize
+            normalized = scaler.fit_transform(features)
+            # Apply weight
+            weighted = normalized * weight
+            weighted_parts.append(weighted)
+    
+    return np.concatenate(weighted_parts, axis=1)
+
+
+def cluster_parts_with_spatial_awareness(
+    part_descriptors: np.ndarray,
+    n_clusters: int = 50,
+    weights: FeatureWeights = None,
+    method: str = 'agglomerative',
+    slot_dim: int = 128,
+    visual_dim: int = 2048,
+    spatial_dim: int = 5,
+    shape_dim: int = 3,
+    random_state: int = 42
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """
+    Cluster parts using visual + spatial similarity.
+    
+    This improved clustering:
+    1. Weights feature types separately (visual most important)
+    2. Uses hierarchical clustering for varying cluster sizes
+    3. Returns quality metrics
+    
+    Args:
+        part_descriptors: Combined part descriptors [N, D]
+        n_clusters: Target number of clusters
+        weights: Feature type weights
+        method: 'agglomerative' or 'kmeans'
+        slot_dim: Dimension of slot features
+        visual_dim: Dimension of visual features
+        spatial_dim: Dimension of spatial features
+        shape_dim: Dimension of shape features
+        random_state: Random seed
+        
+    Returns:
+        cluster_labels: Cluster assignments [N]
+        metrics: Dictionary with clustering quality metrics
+    """
+    weights = weights or FeatureWeights()
+    
+    print(f"\n=== Spatially-Aware Clustering ===")
+    print(f"Input parts: {len(part_descriptors)}")
+    print(f"Target clusters: {n_clusters}")
+    print(f"Method: {method}")
+    print(f"Weights: {weights.to_dict()}")
+    
+    # Split into components
+    components = split_rich_descriptors(
+        part_descriptors,
+        slot_dim=slot_dim,
+        visual_dim=visual_dim,
+        spatial_dim=spatial_dim,
+        shape_dim=shape_dim
+    )
+    
+    # Combine with weights
+    combined = combine_weighted_features(components, weights)
+    print(f"Combined feature dim: {combined.shape[1]}")
+    
+    # Handle NaN values
+    combined = np.nan_to_num(combined)
+    
+    # Perform clustering
+    if method == 'agglomerative':
+        clustering = AgglomerativeClustering(
+            n_clusters=n_clusters,
+            linkage='ward'
+        )
+        cluster_labels = clustering.fit_predict(combined)
+    else:  # kmeans
+        kmeans = KMeans(
+            n_clusters=n_clusters,
+            n_init=20,
+            random_state=random_state
+        )
+        cluster_labels = kmeans.fit_predict(combined)
+    
+    # Calculate quality metrics
+    if len(part_descriptors) > 10000:
+        indices = np.random.choice(len(combined), 10000, replace=False)
+        sil_score = silhouette_score(combined[indices], cluster_labels[indices])
+    else:
+        sil_score = silhouette_score(combined, cluster_labels)
+    
+    db_score = davies_bouldin_score(combined, cluster_labels)
+    
+    # Cluster size distribution
+    unique, counts = np.unique(cluster_labels, return_counts=True)
+    size_stats = {
+        'min': int(counts.min()),
+        'max': int(counts.max()),
+        'mean': float(counts.mean()),
+        'std': float(counts.std())
+    }
+    
+    metrics = {
+        'silhouette_score': float(sil_score),
+        'davies_bouldin_score': float(db_score),
+        'n_clusters': int(n_clusters),
+        'n_samples': int(len(part_descriptors)),
+        'cluster_size_stats': size_stats,
+        'weights': weights.to_dict(),
+        'method': method
+    }
+    
+    print(f"\nClustering Quality:")
+    print(f"  Silhouette Score: {sil_score:.4f}")
+    print(f"  Davies-Bouldin Score: {db_score:.4f}")
+    print(f"  Cluster sizes: min={size_stats['min']}, max={size_stats['max']}, mean={size_stats['mean']:.1f}")
+    
+    return cluster_labels, metrics
+
+
+def refine_clusters(
+    cluster_labels: np.ndarray,
+    features: np.ndarray,
+    min_cluster_size: int = 5,
+    max_intra_cluster_distance: float = None
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """
+    Post-process clusters: merge small clusters, optionally split diverse ones.
+    
+    Args:
+        cluster_labels: Initial cluster assignments [N]
+        features: Feature vectors [N, D]
+        min_cluster_size: Minimum samples per cluster
+        max_intra_cluster_distance: If set, split clusters exceeding this threshold
+        
+    Returns:
+        refined_labels: Refined cluster assignments [N]
+        stats: Refinement statistics
+    """
+    print(f"\n=== Cluster Refinement ===")
+    print(f"Min cluster size: {min_cluster_size}")
+    
+    unique_clusters = np.unique(cluster_labels)
+    n_original = len(unique_clusters)
+    
+    # Identify small clusters
+    small_clusters = []
+    valid_clusters = []
+    
+    for cluster_id in unique_clusters:
+        mask = cluster_labels == cluster_id
+        if mask.sum() < min_cluster_size:
+            small_clusters.append(cluster_id)
+        else:
+            valid_clusters.append(cluster_id)
+    
+    print(f"Found {len(small_clusters)} small clusters to merge")
+    
+    # For small clusters, assign to nearest valid cluster
+    refined_labels = cluster_labels.copy()
+    
+    if len(small_clusters) > 0 and len(valid_clusters) > 0:
+        # Compute cluster centroids for valid clusters
+        centroids = {}
+        for cluster_id in valid_clusters:
+            mask = cluster_labels == cluster_id
+            centroids[cluster_id] = features[mask].mean(axis=0)
+        
+        # Reassign small cluster members
+        for cluster_id in small_clusters:
+            mask = cluster_labels == cluster_id
+            members = features[mask]
+            
+            # Find nearest valid centroid
+            best_cluster = valid_clusters[0]
+            best_dist = float('inf')
+            
+            for valid_id, centroid in centroids.items():
+                dist = np.linalg.norm(members.mean(axis=0) - centroid)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_cluster = valid_id
+            
+            refined_labels[mask] = best_cluster
+    
+    # Renumber clusters to be contiguous
+    unique_refined = np.unique(refined_labels)
+    mapping = {old: new for new, old in enumerate(unique_refined)}
+    refined_labels = np.array([mapping[l] for l in refined_labels])
+    
+    n_final = len(np.unique(refined_labels))
+    
+    stats = {
+        'original_clusters': n_original,
+        'small_clusters_merged': len(small_clusters),
+        'final_clusters': n_final
+    }
+    
+    print(f"Clusters: {n_original} -> {n_final} (merged {len(small_clusters)})")
+    
+    return refined_labels, stats
+
 
 def analyze_cluster_class_correlation(cluster_labels, class_labels, class_names):
     """

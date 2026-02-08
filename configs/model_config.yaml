@@ -10,11 +10,11 @@ backbone:
 
 # Slot Attention for Part Discovery
 slot_attention:
-  num_slots: 8 
+  num_slots: 8  # Increased from 6 for finer-grained parts
   slot_dim: 128  # Dimension of each slot
   hidden_dim: 256  # Hidden dimension for MLP
-  num_iterations: 7  # Increased from 5
-  
+  num_iterations: 8  # Increased for better slot competition
+
   # Encoder (processes backbone features)
   encoder:
     input_dim: 1024  # From ResNet50 Layer3 (changed from 2048)
@@ -32,6 +32,8 @@ slot_attention:
   loss:
     reconstruction_weight: 1.0
     diversity_weight: 0.1  # Encourage diverse slots
+    spatial_coherence_weight: 1.5  # Penalize scattered attention (increased for better spatial consistency)
+    size_regularization_weight: 0.5  # Discourage too small/large parts (increased)
 
 # Classification Head
 classifier:

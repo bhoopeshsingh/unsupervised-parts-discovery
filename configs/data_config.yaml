@@ -3,15 +3,15 @@
 dataset:
   name: "custom"  # Changed from cifar10
   root: "data"
-  custom_path: 'data/custom_masked'  # Path for custom dataset
+  custom_path: 'data/masked'  # Path for custom dataset
   download: true
   
-  # Classes to use (4 classes for initial experiments)
+  # Classes to use (Single class verification)
   classes:
-    - "airplane"  # class_idx: 0
-    - "cat"       # class_idx: 1
-    - "dog"       # class_idx: 2
-    - "bird"      # class_idx: 3
+    # - "airplane"  # class_idx: 0
+    - "cat"       # class_idx: 0
+    # - "dog"       # class_idx: 2
+    # - "bird"      # class_idx: 3
   
   # Approximate 5000 images per class from CIFAR-10 training set
   # CIFAR-10 has 50,000 training images (5,000 per class)

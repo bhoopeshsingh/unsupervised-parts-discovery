@@ -37,6 +37,8 @@ class PartDiscoveryTrainer:
         loss_config = config['slot_attention']['loss']
         self.recon_weight = loss_config['reconstruction_weight']
         self.diversity_weight = loss_config.get('diversity_weight', 0.1)
+        self.spatial_weight = loss_config.get('spatial_coherence_weight', 0.5)
+        self.size_reg_weight = loss_config.get('size_regularization_weight', 0.2)
         
         # Training config
         train_config = config['part_discovery']
@@ -91,7 +93,86 @@ class PartDiscoveryTrainer:
         print(f"  Backbone parameters: {count_parameters(self.backbone):,}")
         print(f"  Slot model parameters: {count_parameters(self.slot_model):,}")
         print(f"  Total parameters: {count_parameters(self.backbone) + count_parameters(self.slot_model):,}")
-    
+        print(f"  Loss weights: recon={self.recon_weight}, diversity={self.diversity_weight}, spatial={self.spatial_weight}, size_reg={self.size_reg_weight}")
+
+    def _compute_spatial_coherence_loss(self, masks: torch.Tensor) -> torch.Tensor:
+        """
+        Compute enhanced spatial coherence loss to encourage compact, connected parts.
+
+        Combines three components:
+        1. Variance-based spread penalty (original)
+        2. Boundary smoothness penalty (encourages smooth contours)
+        3. Entropy penalty (encourages confident attention)
+
+        Args:
+            masks: Slot attention masks [B, num_slots, H, W]
+            
+        Returns:
+            Spatial coherence loss (lower = more compact)
+        """
+        B, num_slots, H, W = masks.shape
+        
+        # === Component 1: Variance-based spatial spread ===
+        # Create coordinate grids
+        y_coords = torch.linspace(0, 1, H, device=masks.device).view(1, 1, H, 1)
+        x_coords = torch.linspace(0, 1, W, device=masks.device).view(1, 1, 1, W)
+        
+        # Normalize masks to get attention weights (sum to 1 per slot)
+        masks_norm = masks / (masks.sum(dim=(2, 3), keepdim=True) + 1e-8)
+        
+        # Compute weighted center of mass for each slot
+        center_y = (masks_norm * y_coords).sum(dim=(2, 3))  # [B, num_slots]
+        center_x = (masks_norm * x_coords).sum(dim=(2, 3))  # [B, num_slots]
+        
+        # Compute weighted variance (spread) around center
+        var_y = (masks_norm * (y_coords - center_y.unsqueeze(-1).unsqueeze(-1)) ** 2).sum(dim=(2, 3))
+        var_x = (masks_norm * (x_coords - center_x.unsqueeze(-1).unsqueeze(-1)) ** 2).sum(dim=(2, 3))
+        
+        # Total spatial spread (penalize high variance = scattered parts)
+        spatial_spread = (var_y + var_x).mean()
+        
+        # === Component 2: Boundary smoothness (Total Variation) ===
+        # Penalize high-frequency variations in the mask (rough boundaries)
+        tv_h = torch.abs(masks[:, :, 1:, :] - masks[:, :, :-1, :]).mean()
+        tv_w = torch.abs(masks[:, :, :, 1:] - masks[:, :, :, :-1]).mean()
+        boundary_smoothness = (tv_h + tv_w) * 0.1  # Scale down as it can dominate
+
+        # === Component 3: Attention entropy penalty ===
+        # Encourage confident (peaky) attention rather than uniform spread
+        # Low entropy = confident, focused attention
+        eps = 1e-8
+        entropy = -(masks_norm * torch.log(masks_norm + eps)).sum(dim=(2, 3)).mean()
+        # Normalize by max possible entropy
+        max_entropy = torch.log(torch.tensor(H * W, dtype=torch.float32, device=masks.device))
+        entropy_penalty = entropy / max_entropy * 0.2  # Scale contribution
+
+        return spatial_spread + boundary_smoothness + entropy_penalty
+
+    def _compute_size_regularization_loss(self, masks: torch.Tensor) -> torch.Tensor:
+        """
+        Compute size regularization loss to discourage too small or too large parts.
+        
+        Args:
+            masks: Slot attention masks [B, num_slots, H, W]
+            
+        Returns:
+            Size regularization loss
+        """
+        B, num_slots, H, W = masks.shape
+        total_pixels = H * W
+        
+        # Compute coverage (fraction of image each slot covers)
+        coverage = masks.sum(dim=(2, 3)) / total_pixels  # [B, num_slots]
+        
+        # Penalize if too small (<2%) or too large (>80%)
+        min_coverage = 0.02
+        max_coverage = 0.80
+        
+        too_small = F.relu(min_coverage - coverage)
+        too_large = F.relu(coverage - max_coverage)
+        
+        return (too_small + too_large).mean()
+
     def compute_loss(
         self,
         images: torch.Tensor,
@@ -115,7 +196,6 @@ class PartDiscoveryTrainer:
         recon_loss = F.mse_loss(recon, images)
         
         # Diversity loss: encourage different slots to be different
-        # Compute pairwise cosine similarity between slots
         slots_norm = F.normalize(slots, dim=-1)
         similarity = torch.bmm(slots_norm, slots_norm.transpose(1, 2))  # [B, num_slots, num_slots]
         
@@ -124,13 +204,26 @@ class PartDiscoveryTrainer:
         mask_mat = 1 - torch.eye(num_slots, device=self.device)
         diversity_loss = (similarity.abs() * mask_mat.unsqueeze(0)).sum() / (B * num_slots * (num_slots - 1))
         
+        # Spatial coherence loss: encourage compact parts
+        spatial_coherence_loss = self._compute_spatial_coherence_loss(masks)
+        
+        # Size regularization loss: discourage too small/large parts
+        size_reg_loss = self._compute_size_regularization_loss(masks)
+        
         # Total loss
-        total_loss = self.recon_weight * recon_loss + self.diversity_weight * diversity_loss
+        total_loss = (
+            self.recon_weight * recon_loss +
+            self.diversity_weight * diversity_loss +
+            self.spatial_weight * spatial_coherence_loss +
+            self.size_reg_weight * size_reg_loss
+        )
         
         return {
             'total_loss': total_loss,
             'recon_loss': recon_loss,
-            'diversity_loss': diversity_loss
+            'diversity_loss': diversity_loss,
+            'spatial_coherence_loss': spatial_coherence_loss,
+            'size_reg_loss': size_reg_loss
         }
     
     def train_epoch(
@@ -142,7 +235,13 @@ class PartDiscoveryTrainer:
         self.backbone.train()
         self.slot_model.train()
         
-        epoch_losses = {'total_loss': 0.0, 'recon_loss': 0.0, 'diversity_loss': 0.0}
+        epoch_losses = {
+            'total_loss': 0.0, 
+            'recon_loss': 0.0, 
+            'diversity_loss': 0.0,
+            'spatial_coherence_loss': 0.0,
+            'size_reg_loss': 0.0
+        }
         
         pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{self.epochs}")
         for batch_idx, (images, _) in enumerate(pbar):
@@ -175,6 +274,8 @@ class PartDiscoveryTrainer:
                         'train_total_loss': losses['total_loss'].item(),
                         'train_recon_loss': losses['recon_loss'].item(),
                         'train_diversity_loss': losses['diversity_loss'].item(),
+                        'train_spatial_coherence_loss': losses['spatial_coherence_loss'].item(),
+                        'train_size_reg_loss': losses['size_reg_loss'].item(),
                         'learning_rate': self.optimizer.param_groups[0]['lr']
                     }, step=self.global_step)
                 
@@ -196,7 +297,13 @@ class PartDiscoveryTrainer:
         self.backbone.eval()
         self.slot_model.eval()
         
-        val_losses = {'total_loss': 0.0, 'recon_loss': 0.0, 'diversity_loss': 0.0}
+        val_losses = {
+            'total_loss': 0.0, 
+            'recon_loss': 0.0, 
+            'diversity_loss': 0.0,
+            'spatial_coherence_loss': 0.0,
+            'size_reg_loss': 0.0
+        }
         
         with torch.no_grad():
             for images, _ in tqdm(val_loader, desc="Validating"):

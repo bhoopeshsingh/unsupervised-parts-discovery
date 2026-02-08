@@ -1,4 +1,4 @@
-"""Extract parts from trained Slot Attention model"""
+"""Extract parts with rich descriptors from trained Slot Attention model"""
 
 import sys
 sys.path.append('.')
@@ -9,195 +9,137 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 import json
+import pickle
 
 from src.data.loaders import create_dataloaders
 from src.models.backbone import ResNetBackbone
 from src.models.part_discovery.slot_attention import SlotAttentionModel
+from src.extraction.part_extractor import PartExtractor
+from src.extraction.part_filter import PartFilter, FilterConfig
 from src.utils import load_config, get_device, set_seed, load_checkpoint
 
 
 def extract_parts(
     backbone,
     slot_model,
+    part_extractor,
     dataloader,
     device,
     limit=None
 ):
     """
-    Extract parts from all images in dataloader
-    
-    Args:
-        backbone: ResNet backbone model
-        slot_model: Slot Attention model
-        dataloader: DataLoader to extract from
-        device: torch.device
-        limit: Optional limit on number of images to process
-    
-    Returns:
-        parts_data: Dictionary containing all extracted information
+    Extract parts from all images in dataloader using PartExtractor.
+    Also collects source images for visualization overlay.
     """
     backbone.eval()
     slot_model.eval()
     
-    all_slots = []
-    all_attn_weights = []
-    all_masks = []
-    all_image_ids = []
-    all_labels = []
-    all_images = []
-    
-    print("Extracting parts from images...")
+    all_descriptors = []
+    all_images = []  # Store source images for visualization
+
+    print("Extracting rich part descriptors...")
     
     with torch.no_grad():
+        image_offset = 0
+        
         for batch_idx, (images, labels) in enumerate(tqdm(dataloader)):
             if limit and batch_idx * dataloader.batch_size >= limit:
                 break
             
             images = images.to(device)
+            # Labels: move to cpu for storage in descriptor
+            labels_cpu = labels.cpu()
             
-            # Store original images (for visualization)
-            all_images.append(images.cpu())
-            
-            # Forward pass through backbone
+            # Store images for visualization (denormalize and convert to uint8)
+            images_np = images.cpu().numpy()
+            for img in images_np:
+                # img is [C, H, W], convert to [H, W, C]
+                img_hwc = np.transpose(img, (1, 2, 0))
+                # Denormalize (assuming ImageNet normalization)
+                mean = np.array([0.485, 0.456, 0.406])
+                std = np.array([0.229, 0.224, 0.225])
+                img_denorm = img_hwc * std + mean
+                img_denorm = np.clip(img_denorm * 255, 0, 255).astype(np.uint8)
+                all_images.append(img_denorm)
+
+            # Forward pass
             features = backbone.get_feature_maps(images)
-            
-            # Forward pass through slot attention
             recon, masks, slots, attn = slot_model(features)
             
-            # Move to CPU and store
-            all_slots.append(slots.cpu().numpy())
-            all_attn_weights.append(attn.cpu().numpy())
-            all_masks.append(masks.cpu().numpy())
-            all_labels.extend(labels.numpy().tolist())
+            # Extract rich parts
+            batch_parts = part_extractor.extract_parts_from_batch(
+                images=images,
+                slots=slots,
+                masks=masks,
+                labels=labels_cpu,
+                image_offset=image_offset
+            )
             
-            # Track image IDs
-            start_id = batch_idx * dataloader.batch_size
-            batch_size = images.size(0)
-            all_image_ids.extend(range(start_id, start_id + batch_size))
-    
-    # Concatenate all batches
-    parts_data = {
-        'slots': np.concatenate(all_slots, axis=0),  # [N, num_slots, slot_dim]
-        'attention_weights': np.concatenate(all_attn_weights, axis=0),  # [N, num_slots, spatial_elements]
-        'masks': np.concatenate(all_masks, axis=0),  # [N, num_slots, H, W]
-        'image_ids': np.array(all_image_ids),
-        'labels': np.array(all_labels)
-    }
-    
-    # Process images if collected
-    if len(all_images) > 0:
-        # Concatenate and denormalize
-        images_tensor = torch.cat(all_images, dim=0) # [N, 3, H, W]
-        
-        # Inverse normalize
-        from src.data.transforms import get_inverse_normalize
-        inv_norm = get_inverse_normalize()
-        
-        # Process in chunks to avoid memory issues if needed, but for CIFAR it's fine
-        images_denorm = []
-        for i in range(len(images_tensor)):
-            img = inv_norm(images_tensor[i])
-            # Clip and convert to uint8 [H, W, 3]
-            img = img.permute(1, 2, 0).cpu().numpy()
-            img = np.clip(img * 255, 0, 255).astype(np.uint8)
-            images_denorm.append(img)
+            all_descriptors.extend(batch_parts)
             
-        parts_data['images'] = np.array(images_denorm)
-    
-    print(f"\nExtracted parts from {len(all_image_ids)} images")
-    print(f"Slots shape: {parts_data['slots'].shape}")
-    print(f"Masks shape: {parts_data['masks'].shape}")
-    
-    return parts_data
+            image_offset += images.size(0)
+            
+    print(f"\nExtracted {len(all_descriptors)} parts from {image_offset} images")
+    print(f"Collected {len(all_images)} source images for visualization")
+    return all_descriptors, all_images
 
 
-def save_parts_data(parts_data, save_dir, metadata):
-    """Save extracted parts data to disk"""
+def save_parts_data(descriptors, images, save_dir, metadata):
+    """Save extracted parts data to disk including source images for visualization"""
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save arrays
-    np.save(save_dir / 'slots.npy', parts_data['slots'])
-    np.save(save_dir / 'attention_weights.npy', parts_data['attention_weights'])
-    np.save(save_dir / 'masks.npy', parts_data['masks'])
-    np.save(save_dir / 'image_ids.npy', parts_data['image_ids'])
-    np.save(save_dir / 'labels.npy', parts_data['labels'])
-    if 'images' in parts_data:
-        np.save(save_dir / 'images.npy', parts_data['images'])
-        print(f"  - images.npy: {parts_data['images'].nbytes / 1e6:.2f} MB")
+    # 1. Create combined feature matrix [N_parts, D_total]
+    print("Creating feature matrix...")
+    features = np.array([d.to_combined_vector() for d in descriptors], dtype=np.float32)
     
-    # Save metadata
+    # 2. Extract components for backward compatibility/analysis
+    # Note: These are flattened, unlike original [N_images, N_slots, D]
+    slots = np.array([d.slot_features for d in descriptors], dtype=np.float32)
+    masks = np.array([d.mask for d in descriptors], dtype=np.float32)
+    
+    # 3. Extract metadata arrays
+    image_ids = np.array([d.image_idx for d in descriptors], dtype=int)
+    slot_ids = np.array([d.slot_idx for d in descriptors], dtype=int)
+    labels = np.array([d.class_label for d in descriptors], dtype=int)
+    bboxes = np.array([d.bbox for d in descriptors], dtype=int)
+    
+    # 4. Save source images for visualization overlay
+    print("Saving source images for visualization...")
+    images_array = np.array(images, dtype=np.uint8)
+
+    # 5. Save arrays
+    np.save(save_dir / 'features.npy', features)
+    np.save(save_dir / 'slots.npy', slots)
+    np.save(save_dir / 'masks.npy', masks)
+    np.save(save_dir / 'part_to_image.npy', image_ids)
+    np.save(save_dir / 'part_to_slot.npy', slot_ids)
+    np.save(save_dir / 'part_to_class.npy', labels)
+    np.save(save_dir / 'bboxes.npy', bboxes)
+    np.save(save_dir / 'images.npy', images_array)  # Source images for overlay
+
+    # 5. Save metadata
     metadata_path = save_dir / 'metadata.json'
+    # Add feature dimensions to metadata
+    if descriptors:
+        d = descriptors[0]
+        metadata['feature_dims'] = {
+            'total': int(d.total_dim),
+            'slot': len(d.slot_features),
+            'visual': len(d.visual_features),
+            'spatial': len(d.spatial_features),
+            'shape': len(d.shape_features)
+        }
+    
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
-    
+        
     print(f"\nParts data saved to: {save_dir}")
-    print(f"  - slots.npy: {parts_data['slots'].nbytes / 1e6:.2f} MB")
-    print(f"  - masks.npy: {parts_data['masks'].nbytes / 1e6:.2f} MB")
+    print(f"  - features.npy: {features.nbytes / 1e6:.2f} MB")
+    print(f"  - slots.npy: {slots.nbytes / 1e6:.2f} MB")
+    print(f"  - masks.npy: {masks.nbytes / 1e6:.2f} MB")
+    print(f"  - images.npy: {images_array.nbytes / 1e6:.2f} MB")
     print(f"  - metadata.json")
-
-
-def visualize_sample_parts(
-    parts_data,
-    dataloader,
-    num_samples=5,
-    save_dir=None
-):
-    """
-    Create visualizations of extracted parts
-    
-    Shows: original image | attention maps (one per slot) | reconstructed masks
-    """
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    
-    if save_dir:
-        save_dir = Path(save_dir)
-        save_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Get some sample images
-    images_iter = iter(dataloader)
-    images, labels = next(images_iter)
-    
-    num_slots = parts_data['masks'].shape[1]
-    
-    for sample_idx in range(min(num_samples, len(images))):
-        fig = plt.figure(figsize=(20, 4))
-        gs = GridSpec(1, num_slots + 2, figure=fig)
-        
-        # Original image
-        ax = fig.add_subplot(gs[0, 0])
-        img = images[sample_idx].permute(1, 2, 0).numpy()
-        img = (img - img.min()) / (img.max() - img.min())  # Normalize
-        ax.imshow(img)
-        ax.set_title(f'Original\nLabel: {labels[sample_idx]}')
-        ax.axis('off')
-        
-        # Attention masks for each slot
-        masks = parts_data['masks'][sample_idx]  # [num_slots, H, W]
-        
-        for slot_idx in range(num_slots):
-            ax = fig.add_subplot(gs[0, slot_idx + 1])
-            ax.imshow(masks[slot_idx], cmap='hot', interpolation='bilinear')
-            ax.set_title(f'Slot {slot_idx}')
-            ax.axis('off')
-        
-        # Composite (all masks summed)
-        ax = fig.add_subplot(gs[0, -1])
-        composite = masks.sum(axis=0)
-        ax.imshow(composite, cmap='viridis', interpolation='bilinear')
-        ax.set_title('Composite')
-        ax.axis('off')
-        
-        plt.tight_layout()
-        
-        if save_dir:
-            plt.savefig(save_dir / f'sample_{sample_idx}.png', dpi=150, bbox_inches='tight')
-            print(f"Saved visualization: sample_{sample_idx}.png")
-        else:
-            plt.show()
-        
-        plt.close()
 
 
 def main():
@@ -208,10 +150,6 @@ def main():
                         help='Directory to save extracted parts')
     parser.add_argument('--limit', type=int, default=None,
                         help='Limit number of images to process (for testing)')
-    parser.add_argument('--visualize', action='store_true',
-                        help='Generate visualization samples')
-    parser.add_argument('--num-samples', type=int, default=10,
-                        help='Number of visualization samples to generate')
     args = parser.parse_args()
     
     # Load configurations
@@ -224,7 +162,7 @@ def main():
     # Device
     device = get_device(model_config.get('device', 'auto'))
     
-    # Create dataloaders (use train set for extraction)
+    # Create dataloaders
     print("\nPreparing datasets...")
     train_loader, _ = create_dataloaders(
         data_config['dataset'],
@@ -236,6 +174,10 @@ def main():
     print("\nInitializing models...")
     backbone = ResNetBackbone.from_config(model_config['backbone'])
     slot_model = SlotAttentionModel.from_config(model_config)
+    
+    # Initialize Part Extractor
+    print("Initializing Part Extractor...")
+    part_extractor = PartExtractor(device=device)
     
     # Load checkpoint
     print(f"\nLoading checkpoint from: {args.checkpoint}")
@@ -249,45 +191,61 @@ def main():
     backbone.to(device)
     slot_model.to(device)
     
-    # Extract parts
-    parts_data = extract_parts(
+    # Extract parts (now also returns source images for visualization)
+    descriptors, source_images = extract_parts(
         backbone=backbone,
         slot_model=slot_model,
+        part_extractor=part_extractor,
         dataloader=train_loader,
         device=device,
         limit=args.limit
     )
     
+    # Filter out low-quality parts before clustering
+    print("\n=== Filtering Low-Quality Parts ===")
+    filter_config = FilterConfig(
+        min_coverage=0.02,  # Reject parts < 2% of image
+        max_coverage=0.80,  # Reject parts > 80% of image (likely background)
+        max_connected_components=2,  # Reject scattered attention
+        min_edge_density=0.05,  # Reject blank/uniform regions
+        min_std=0.1,  # Reject single-color regions
+        min_bbox_size=4
+    )
+    part_filter = PartFilter(config=filter_config)
+
+    # Filter and get statistics
+    filtered_descriptors, filter_stats = part_filter.filter_valid_parts(
+        descriptors, return_stats=True
+    )
+
+    print(f"Total input parts: {filter_stats['total_input']}")
+    print(f"Valid parts after filtering: {filter_stats['total_valid']}")
+    print(f"Rejected parts: {filter_stats['total_rejected']} ({filter_stats['rejection_rate']:.1%})")
+    print(f"Rejection breakdown:")
+    for reason, count in filter_stats['rejection_reasons'].items():
+        if count > 0:
+            print(f"  - {reason}: {count}")
+
+    # Use filtered descriptors
+    descriptors = filtered_descriptors
+
     # Prepare metadata
     metadata = {
-        'num_images': len(parts_data['image_ids']),
-        'num_slots': parts_data['slots'].shape[1],
-        'slot_dim': parts_data['slots'].shape[2],
-        'mask_size': list(parts_data['masks'].shape[2:]),
+        'num_parts': len(descriptors),
+        'num_parts_before_filtering': filter_stats['total_input'],
+        'filtering_stats': filter_stats,
+        'num_images': len(source_images),
         'checkpoint_epoch': checkpoint.get('epoch', 'unknown') if checkpoint else 'none',
         'checkpoint_loss': float(checkpoint.get('loss', 0)) if checkpoint else 0.0,
         'classes': data_config['dataset']['classes'],
         'model_config': model_config
     }
     
-    # Save extracted data
-    save_parts_data(parts_data, args.output_dir, metadata)
-    
-    # Generate visualizations
-    if args.visualize:
-        print("\nGenerating visualizations...")
-        vis_dir = Path(args.output_dir) / 'visualizations'
-        visualize_sample_parts(
-            parts_data=parts_data,
-            dataloader=train_loader,
-            num_samples=args.num_samples,
-            save_dir=vis_dir
-        )
-    
+    # Save extracted data (including source images for visualization)
+    save_parts_data(descriptors, source_images, args.output_dir, metadata)
+
     print("\n✓ Part extraction completed successfully!")
-    print(f"\nNext steps:")
-    print(f"  1. Review visualizations in: {Path(args.output_dir) / 'visualizations'}")
-    print(f"  2. Run clustering: python experiments/cluster_parts.py")
+    print(f"\nNext step: Run clustering: python experiments/cluster_parts.py")
 
 
 if __name__ == '__main__':

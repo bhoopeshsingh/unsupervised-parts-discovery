@@ -1,14 +1,14 @@
 # Training Configuration
 
 part_discovery:
-  epochs: 1
+  epochs: 15  # Reduced for faster iteration (was 50, ~15min/epoch)
   learning_rate: 0.0005   # tuned for smoother convergence on MPS
   weight_decay: 0.00005
   optimizer: "adamw"      # more stable for Slot Attention
   scheduler:
     type: "cosine_warmup"
-    warmup_epochs: 5      # reduced to avoid early instability
-    T_max: 50
+    warmup_epochs: 2      # reduced for shorter training
+    T_max: 15             # match epochs
     eta_min: 0.000001     # lower floor for final refinement
   
   # Mixed precision for MPS = large speed boost
@@ -16,7 +16,7 @@ part_discovery:
   
   # Checkpointing
   checkpoint_dir: "../checkpoints/part_discovery"
-  save_every: 10
+  save_every: 5  # Save every 5 epochs
   save_best: true
   
   # Logging
