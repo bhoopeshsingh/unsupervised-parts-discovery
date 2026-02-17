@@ -17,9 +17,13 @@ from src.utils import load_config, get_device, set_seed
 
 def main():
     # Load configurations
-    data_config = load_config('configs/data_config.yaml')
-    model_config = load_config('configs/model_config.yaml')
-    training_config = load_config('configs/training_config.yaml')
+    # Load configurations
+    unified_config = load_config('configs/unified_config.yaml')
+    
+    # Extract sections for compatibility
+    data_config = unified_config
+    model_config = unified_config
+    training_config = unified_config
     
     # Set seed
     set_seed(data_config.get('seed', 42))

@@ -40,19 +40,19 @@ def main():
     parser = argparse.ArgumentParser(description='Run improved part discovery pipeline')
     parser.add_argument('--skip-training', action='store_true',
                         help='Skip training step (use existing checkpoint)')
-    parser.add_argument('--checkpoint', type=str,
-                        default='checkpoints/part_discovery/best_model.pt',
-                        help='Checkpoint path for extraction')
-    parser.add_argument('--n-clusters', type=int, default=100,
-                        help='Number of clusters (recommended: 100-200)')
-    parser.add_argument('--visual-weight', type=float, default=1.5,
-                        help='Weight for visual features')
-    parser.add_argument('--slot-weight', type=float, default=0.3,
-                        help='Weight for slot features')
-    parser.add_argument('--min-cluster-size', type=int, default=10,
-                        help='Minimum cluster size for refinement')
+    parser.add_argument('--checkpoint', type=str, default=None,
+                        help='Checkpoint path for extraction (default: read from config)')
+    parser.add_argument('--n-clusters', type=int, default=None,
+                        help='Number of clusters (default: read from config)')
+    parser.add_argument('--visual-weight', type=float, default=None,
+                        help='Weight for visual features (default: read from config)')
+    parser.add_argument('--slot-weight', type=float, default=None,
+                        help='Weight for slot features (default: read from config)')
+    parser.add_argument('--min-cluster-size', type=int, default=None,
+                        help='Minimum cluster size for refinement (default: read from config)')
     parser.add_argument('--limit', type=int, default=None,
                         help='Limit number of images for testing')
+    parser.add_argument('--refine', action='store_true', help='Apply post-processing refinement')
     args = parser.parse_args()
 
     print("\n" + "="*60)
@@ -78,11 +78,13 @@ def main():
             sys.exit(1)
 
     # Step 2: Extract parts with filtering
-    extract_cmd = [
-        'python', 'experiments/extract_parts.py',
-        '--checkpoint', args.checkpoint,
-        '--output-dir', './parts/extracted'
-    ]
+    # Rely on defaults in extract_parts.py which now read from unified_config.yaml
+    extract_cmd = ['python', 'experiments/extract_parts.py']
+    
+    # Only pass checkpoint if explicitly provided to this script, otherwise let extract_parts find it in config
+    if args.checkpoint:
+         extract_cmd.extend(['--checkpoint', args.checkpoint])
+         
     if args.limit:
         extract_cmd.extend(['--limit', str(args.limit)])
 
@@ -92,17 +94,17 @@ def main():
     )
 
     # Step 3: Cluster with improved settings
+    # Rely on defaults in cluster_parts.py which now read from unified_config.yaml
+    cluster_cmd = ['python', 'experiments/cluster_parts.py']
+    
+    # We only pass args if they were explicitly provided (not None)
+    # But for now, since we want to force config file usage, we just run it without args
+    # except maybe refine which is a flag
+    if args.refine:
+        cluster_cmd.append('--refine')
+        
     run_command(
-        [
-            'python', 'experiments/cluster_parts.py',
-            '--parts-dir', './parts/extracted',
-            '--output-dir', './parts/clusters',
-            '--n-clusters', str(args.n_clusters),
-            '--visual-weight', str(args.visual_weight),
-            '--slot-weight', str(args.slot_weight),
-            '--min-cluster-size', str(args.min_cluster_size),
-            '--refine'
-        ],
+        cluster_cmd,
         "Clustering Parts with Visual Features + Refinement"
     )
 

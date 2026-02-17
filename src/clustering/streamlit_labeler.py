@@ -196,22 +196,35 @@ def render_labeling_page():
     st.title("🏷️ Part Cluster Labeling")
     st.markdown("---")
     
+    # Load config for defaults
+    from src.utils import load_config
+    try:
+        data_config = load_config('configs/data_config.yaml')
+        default_parts = data_config.get('paths', {}).get('extracted_parts', './parts/extracted_cat_improved')
+        default_clusters = data_config.get('paths', {}).get('clusters', './parts/clusters_cat_improved')
+        default_labels = data_config.get('paths', {}).get('labels', './parts/labels/cluster_labels.json')
+    except Exception:
+        # Fallback if config load fails
+        default_parts = "./parts/extracted_cat_improved"
+        default_clusters = "./parts/clusters_cat_improved"
+        default_labels = "./parts/labels/cluster_labels.json"
+
     # Sidebar configuration
     st.sidebar.header("⚙️ Configuration")
     
     parts_dir = st.sidebar.text_input(
         "Parts Directory",
-        value="./parts/extracted"
+        value=default_parts
     )
     
     clusters_dir = st.sidebar.text_input(
         "Clusters Directory",
-        value="./parts/clusters"
+        value=default_clusters
     )
     
     labels_file = st.sidebar.text_input(
         "Labels Output File",
-        value="./parts/labels/cluster_labels.json"
+        value=default_labels
     )
     
     # Load data
@@ -258,12 +271,39 @@ def render_labeling_page():
     all_cluster_ids = list(range(n_clusters))
     labeled_ids = set(int(k) for k in cluster_labels_dict.keys())
     
+    # Calculate sizes for sorting
+    cluster_sizes = {
+        cid: (data['cluster_labels'] == cid).sum() 
+        for cid in all_cluster_ids
+    }
+    
     if filter_option == "Unlabeled Only":
         display_cluster_ids = [cid for cid in all_cluster_ids if cid not in labeled_ids]
     elif filter_option == "Labeled Only":
         display_cluster_ids = list(labeled_ids)
     else:
         display_cluster_ids = all_cluster_ids
+        
+    # Sort by size (descending)
+    display_cluster_ids.sort(key=lambda cid: cluster_sizes[cid], reverse=True)
+    
+    # Limit number of clusters shown
+    with col2:
+        top_n = st.select_slider(
+            "Show Top N (by size)",
+            options=[10, 20, 50, 100, "All"],
+            value=20
+        )
+        
+    if top_n != "All":
+        display_cluster_ids = display_cluster_ids[:int(top_n)]
+        
+    # Add rank info to formatting
+    def format_cluster(cid):
+        label_info = ""
+        if str(cid) in cluster_labels_dict:
+            label_info = f" - {cluster_labels_dict[str(cid)]['label']}"
+        return f"Cluster {cid} (Size: {cluster_sizes[cid]}){label_info}"
     
     # Cluster selection
     if not display_cluster_ids:
@@ -273,7 +313,7 @@ def render_labeling_page():
     selected_cluster = st.selectbox(
         "Select Cluster to Label",
         options=display_cluster_ids,
-        format_func=lambda x: f"Cluster {x}" + (f" - {cluster_labels_dict[str(x)]['label']}" if str(x) in cluster_labels_dict else "")
+        format_func=format_cluster
     )
     
     st.markdown("---")

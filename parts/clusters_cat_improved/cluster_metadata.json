@@ -1,0 +1,902 @@
+{
+  "0": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "1": {
+    "size": 90,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 90
+    }
+  },
+  "2": {
+    "size": 585,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 585
+    }
+  },
+  "3": {
+    "size": 149,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 149
+    }
+  },
+  "4": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "5": {
+    "size": 179,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 179
+    }
+  },
+  "6": {
+    "size": 165,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 165
+    }
+  },
+  "7": {
+    "size": 420,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 420
+    }
+  },
+  "8": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "9": {
+    "size": 210,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 210
+    }
+  },
+  "10": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "11": {
+    "size": 135,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 135
+    }
+  },
+  "12": {
+    "size": 314,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 314
+    }
+  },
+  "13": {
+    "size": 60,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 60
+    }
+  },
+  "14": {
+    "size": 75,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 75
+    }
+  },
+  "15": {
+    "size": 60,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 60
+    }
+  },
+  "16": {
+    "size": 75,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 75
+    }
+  },
+  "17": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "18": {
+    "size": 90,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 90
+    }
+  },
+  "19": {
+    "size": 150,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 150
+    }
+  },
+  "20": {
+    "size": 105,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 105
+    }
+  },
+  "21": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "22": {
+    "size": 60,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 60
+    }
+  },
+  "23": {
+    "size": 285,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 285
+    }
+  },
+  "24": {
+    "size": 105,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 105
+    }
+  },
+  "25": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "26": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "27": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "28": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "29": {
+    "size": 120,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 120
+    }
+  },
+  "30": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "31": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "32": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "33": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "34": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "35": {
+    "size": 150,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 150
+    }
+  },
+  "36": {
+    "size": 209,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 209
+    }
+  },
+  "37": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "38": {
+    "size": 120,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 120
+    }
+  },
+  "39": {
+    "size": 90,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 90
+    }
+  },
+  "40": {
+    "size": 60,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 60
+    }
+  },
+  "41": {
+    "size": 210,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 210
+    }
+  },
+  "42": {
+    "size": 180,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 180
+    }
+  },
+  "43": {
+    "size": 75,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 75
+    }
+  },
+  "44": {
+    "size": 329,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 329
+    }
+  },
+  "45": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "46": {
+    "size": 75,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 75
+    }
+  },
+  "47": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "48": {
+    "size": 238,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 238
+    }
+  },
+  "49": {
+    "size": 90,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 90
+    }
+  },
+  "50": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "51": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "52": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "53": {
+    "size": 90,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 90
+    }
+  },
+  "54": {
+    "size": 120,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 120
+    }
+  },
+  "55": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "56": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "57": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "58": {
+    "size": 104,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 104
+    }
+  },
+  "59": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "60": {
+    "size": 285,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 285
+    }
+  },
+  "61": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "62": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "63": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "64": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "65": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "66": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "67": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "68": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "69": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "70": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "71": {
+    "size": 120,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 120
+    }
+  },
+  "72": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "73": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "74": {
+    "size": 164,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 164
+    }
+  },
+  "75": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "76": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "77": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "78": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "79": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "80": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "81": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "82": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "83": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "84": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "85": {
+    "size": 225,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 225
+    }
+  },
+  "86": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "87": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "88": {
+    "size": 60,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 60
+    }
+  },
+  "89": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "90": {
+    "size": 75,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 75
+    }
+  },
+  "91": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "92": {
+    "size": 105,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 105
+    }
+  },
+  "93": {
+    "size": 30,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 30
+    }
+  },
+  "94": {
+    "size": 59,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 59
+    }
+  },
+  "95": {
+    "size": 59,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 59
+    }
+  },
+  "96": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  },
+  "97": {
+    "size": 45,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 45
+    }
+  },
+  "98": {
+    "size": 120,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 120
+    }
+  },
+  "99": {
+    "size": 15,
+    "dominant_class": "cat",
+    "dominant_class_idx": 0,
+    "purity": 1.0,
+    "class_distribution": {
+      "cat": 15
+    }
+  }
+}

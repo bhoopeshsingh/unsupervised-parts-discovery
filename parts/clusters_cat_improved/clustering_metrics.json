@@ -1,0 +1,24 @@
+{
+  "silhouette_score": 0.16400843858718872,
+  "davies_bouldin_score": 1.9204325417747754,
+  "n_clusters": 100,
+  "n_samples": 8074,
+  "cluster_size_stats": {
+    "min": 15,
+    "max": 585,
+    "mean": 80.74,
+    "std": 96.11104202951917
+  },
+  "weights": {
+    "visual": 1.5,
+    "spatial": 0.3,
+    "shape": 0.5,
+    "slot": 0.3
+  },
+  "method": "agglomerative",
+  "refinement": {
+    "original_clusters": 100,
+    "small_clusters_merged": 0,
+    "final_clusters": 100
+  }
+}

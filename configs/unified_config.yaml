@@ -1,0 +1,231 @@
+# Unified Configuration File for Unsupervised Parts Discovery
+# Merges data_config.yaml, model_config.yaml, and training_config.yaml
+
+# ==============================================================================
+# DATA CONFIGURATION
+# ==============================================================================
+dataset:
+  name: "custom"  # Changed from cifar10
+  root: "data"
+  custom_path: 'data/masked/train/cat'  # Path for custom dataset
+  download: true
+
+# Centralized paths
+paths:
+  checkpoint_dir: "checkpoints/cat_parts_improved"
+  best_model: "checkpoints/cat_parts_improved/best_model.pt"
+  extracted_parts: "parts/extracted_cat_improved"
+  clusters: "parts/clusters_cat_improved"
+  labels: "parts/labels/cluster_labels.json"
+  
+  # Classes to use (Single class verification)
+  classes:
+    # - "airplane"  # class_idx: 0
+    - "cat"       # class_idx: 0
+    # - "dog"       # class_idx: 2
+    # - "bird"      # class_idx: 3
+  
+  # Approximate 5000 images per class from CIFAR-10 training set
+  # CIFAR-10 has 50,000 training images (5,000 per class)
+  train_split: 0.9  # Use all available images for selected classes
+  val_split: 0.1    # 10% for validation
+  
+  # Image properties
+  img_size: 128  # Increased to 128
+  num_channels: 3
+
+# Data augmentation
+augmentation:
+  train:
+    random_crop: true
+    crop_size: 128
+    padding: 4
+    horizontal_flip: true
+    flip_prob: 0.5
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+  
+  val:
+    # No augmentation for validation
+    resize: 128
+
+# DataLoader settings
+dataloader:
+  batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: true
+
+# Random seed for reproducibility
+seed: 42
+
+# ==============================================================================
+# MODEL ARCHITECTURE CONFIGURATION
+# ==============================================================================
+
+# Shared Backbone
+backbone:
+  name: "resnet50"
+  pretrained: true
+  freeze_early_layers: true  # Stabilize features
+  use_layer4: false  # Use Layer3 for better spatial resolution (8x8 vs 4x4)
+  feature_dim: 1024  # ResNet50 Layer3 output dimension
+
+# Slot Attention for Part Discovery
+slot_attention:
+  num_slots: 15  # INCREASED: Even more fine-grained
+  slot_dim: 128  # Dimension of each slot
+  hidden_dim: 128  # Hidden dimension for MLP
+  num_iterations: 7  # INCREASED: More refinement iterations
+
+  # Encoder (processes backbone features)
+  encoder:
+    input_dim: 1024  # From ResNet50 Layer3
+    output_dim: 128
+    hidden_dims: [512, 256]
+  
+  # Decoder (for reconstruction)
+  decoder:
+    input_dim: 128
+    hidden_dims: [256, 512]
+    output_channels: 3  # RGB
+    output_size: 128  # Match data config
+  
+  # Loss weights - IMPROVED for fine-grained parts
+  loss:
+    reconstruction_weight: 1.0    # Maintain reconstruction quality
+    diversity_weight: 1.0         # 5X STRONGER! Force very different parts
+    spatial_coherence_weight: 5.0 # 10X STRONGER! Force tight localization
+    size_regularization_weight: 3.0  # 10X STRONGER! Heavily penalize large parts
+    edge_weight: 0.25              # Stronger edge alignment
+    compactness_weight: 0.5       # Force very circular parts
+
+    # Size constraints - VERY STRICT
+    min_coverage: 0.005  # Allow very small parts (0.5%)
+    max_coverage: 0.15   # STRICT! Max 15%
+
+    # New loss weights for improved part discovery
+    equivariance_weight: 1.0       # Force geometric consistency
+    concentration_weight: 1.0      # Force binary masks (sharpness)
+    spatial_entropy_weight: 2.0    # Penalize large spatial spread
+    mask_overlap_weight: 2.0       # Force slot distinctness
+
+    # Warmup periods (in epochs)
+    equivariance_warmup_epochs: 3
+    concentration_warmup_epochs: 3
+
+  # Transformation constraints for equivariance loss
+  transforms:
+    degrees: 15          # Rotation +/- 15 degrees
+    translate: [0.1, 0.1] # Translation +/- 10%
+    scale: null          # No scaling initially
+    hflip: true          # Horizontal flip allowed
+
+# Classification Head (optional, for downstream tasks)
+classifier:
+  input_dim: 1024  # From ResNet50 Layer3
+  hidden_dims: [512, 256]
+  num_classes: 3  # airplane, cat, dog
+  dropout: 0.3
+
+# Device settings
+device: "mps"  # For M4 Mac (use "cuda" for NVIDIA, "cpu" for CPU-only)
+
+# ==============================================================================
+# TRAINING CONFIGURATION
+# ==============================================================================
+
+part_discovery:
+  epochs: 15  # Test with 15 epochs
+  learning_rate: 0.00001  # VERY SLOW learning (was 5e-5)
+  weight_decay: 0.0001    # Stronger regularization
+  optimizer: "adamw"      # More stable for Slot Attention
+  scheduler:
+    type: "cosine_warmup"
+    warmup_epochs: 2
+    T_max: 15             # Match epochs
+    eta_min: 0.000001
+
+  # Mixed precision for MPS = large speed boost
+  mixed_precision: true
+  
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/cat_parts_improved"
+  save_every: 5  # Save every 5 epochs
+  save_best: true
+  
+  # Logging
+  log_every: 5
+  visualize_every: 200
+
+  # Dataloader (overrides data_config if needed, but we'll try to use data_config)
+  dataloader:
+    batch_size: 8
+    num_workers: 0
+    pin_memory: false
+    persistent_workers: false
+
+classification:
+  epochs: 50
+  learning_rate: 0.0008  # smaller LR for stability in fine-tuning
+  weight_decay: 0.00005
+  optimizer: "adamw"
+  scheduler:
+    type: "step"
+    step_size: 15
+    gamma: 0.2
+  
+  checkpoint_dir: "../checkpoints/classification"
+  save_every: 5
+  save_best: true
+
+  log_every: 15
+
+  dataloader:
+    batch_size: 32
+    num_workers: 2
+    pin_memory: false
+    persistent_workers: false
+
+mlflow:
+  experiment_name: "interpretable_space"
+  tracking_uri: "http://0.0.0.0:5050"  # MLflow tracking server
+  enabled: true  # Set to false to disable tracking
+  tags:
+    architecture: "slot-attention"
+    dataset: "custom-128"
+    num_classes: "3"
+    device: "m4-mps"
+  run_name_prefix: "part_discovery"
+  notes: "MPS optimized training with mixed precision and AdamW"
+
+early_stopping:
+  patience: 7
+  min_delta: 0.0008
+
+# ==============================================================================
+# POST-PROCESSING CONFIGURATION
+# ==============================================================================
+
+filtering:
+  min_coverage: 0.005  # Match training constraint (was 0.02)
+  max_coverage: 0.15   # Match training constraint (was 0.80)
+  max_connected_components: 2
+  min_edge_density: 0.05
+  min_std: 0.1
+  min_bbox_size: 4
+
+clustering:
+  n_clusters: 100
+  method: "agglomerative"
+  visual_weight: 1.5
+  spatial_weight: 0.3
+  shape_weight: 0.5
+  slot_weight: 0.3
+  refine: true
+  min_cluster_size: 10

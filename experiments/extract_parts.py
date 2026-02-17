@@ -143,18 +143,35 @@ def save_parts_data(descriptors, images, save_dir, metadata):
 
 
 def main():
+    # Load config for defaults
+    try:
+        unified_config = load_config('configs/unified_config.yaml')
+        paths_config = unified_config.get('paths', {})
+        default_checkpoint = paths_config.get('best_model', 'checkpoints/part_discovery/best_model.pt')
+        default_output = paths_config.get('extracted_parts', './parts/extracted')
+    except:
+        default_checkpoint = 'checkpoints/part_discovery/best_model.pt'
+        default_output = './parts/extracted'
+
     parser = argparse.ArgumentParser(description='Extract parts from trained Slot Attention model')
-    parser.add_argument('--checkpoint', type=str, default='checkpoints/part_discovery/best_model.pt',
+    parser.add_argument('--checkpoint', type=str, default=default_checkpoint,
                         help='Path to model checkpoint')
-    parser.add_argument('--output-dir', type=str, default='./parts/extracted',
+    parser.add_argument('--output-dir', type=str, default=default_output,
                         help='Directory to save extracted parts')
     parser.add_argument('--limit', type=int, default=None,
                         help='Limit number of images to process (for testing)')
     args = parser.parse_args()
     
     # Load configurations
-    data_config = load_config('configs/data_config.yaml')
-    model_config = load_config('configs/model_config.yaml')
+    # Load configurations
+    config = load_config('configs/unified_config.yaml')
+    data_config = config
+    model_config = config
+    
+    # Ensure classes are propagated from paths to dataset config if missing
+    # This fixes the KeyError and ensures data loader uses the correct classes
+    if 'classes' not in data_config['dataset'] and 'classes' in data_config.get('paths', {}):
+        data_config['dataset']['classes'] = data_config['paths']['classes']
     
     # Set seed
     set_seed(data_config.get('seed', 42))
@@ -201,15 +218,19 @@ def main():
         limit=args.limit
     )
     
+    # Load configuration for filtering
+    unified_config = load_config('configs/unified_config.yaml')
+    filter_params = unified_config.get('filtering', {})
+
     # Filter out low-quality parts before clustering
     print("\n=== Filtering Low-Quality Parts ===")
     filter_config = FilterConfig(
-        min_coverage=0.02,  # Reject parts < 2% of image
-        max_coverage=0.80,  # Reject parts > 80% of image (likely background)
-        max_connected_components=2,  # Reject scattered attention
-        min_edge_density=0.05,  # Reject blank/uniform regions
-        min_std=0.1,  # Reject single-color regions
-        min_bbox_size=4
+        min_coverage=filter_params.get('min_coverage', 0.02),
+        max_coverage=filter_params.get('max_coverage', 0.85),
+        max_connected_components=filter_params.get('max_connected_components', 2),
+        min_edge_density=filter_params.get('min_edge_density', 0.05),
+        min_std=filter_params.get('min_std', 0.1),
+        min_bbox_size=filter_params.get('min_bbox_size', 4)
     )
     part_filter = PartFilter(config=filter_config)
 

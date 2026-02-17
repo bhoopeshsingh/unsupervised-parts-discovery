@@ -13,15 +13,27 @@ from src.utils import load_config, get_device, load_checkpoint
 class InferencePipeline:
     def __init__(self, 
                  model_config_path='configs/model_config.yaml',
-                 checkpoint_path='checkpoints/part_discovery/checkpoint_epoch_30.pt',
-                 clusters_dir='parts/clusters'):
+                 data_config_path='configs/data_config.yaml',
+                 checkpoint_path=None,
+                 clusters_dir=None):
         
         self.device = get_device('auto')
         self.model_config = load_config(model_config_path)
+        
+        # Load data config for paths
+        self.data_config = load_config(data_config_path)
+        paths = self.data_config.get('paths', {})
+        
+        if checkpoint_path is None:
+            checkpoint_path = paths.get('best_model', 'checkpoints/cat_parts_improved/best_model.pt')
+            
+        if clusters_dir is None:
+            clusters_dir = paths.get('clusters', 'parts/clusters_cat_improved')
+            
         self.clusters_dir = Path(clusters_dir)
         
         # Load Models
-        print("Loading models...")
+        print(f"Loading checkpoint from {checkpoint_path}...")
         # Use config resolution (128x128)
         # self.model_config['slot_attention']['decoder']['output_size'] = 32
         

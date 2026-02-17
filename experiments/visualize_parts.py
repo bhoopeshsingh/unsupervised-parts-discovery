@@ -151,8 +151,10 @@ def main():
     args = parser.parse_args()
     
     # Load config
-    data_config = load_config('configs/data_config.yaml')
-    model_config = load_config('configs/model_config.yaml')
+    # Load config
+    config = load_config('configs/unified_config.yaml')
+    data_config = config
+    model_config = config
     
     # Setup
     device = get_device(model_config.get('device', 'auto'))

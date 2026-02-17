@@ -45,26 +45,41 @@ def load_rich_parts_data(parts_dir):
         sys.exit(1)
 
 def main():
+    # Load default paths and settings from config
+    from src.utils import load_config
+    try:
+        unified_config = load_config('configs/unified_config.yaml')
+        paths_config = unified_config.get('paths', {})
+        clustering_config = unified_config.get('clustering', {})
+        
+        default_parts = paths_config.get('extracted_parts', './parts/extracted_cat_improved')
+        default_output = paths_config.get('clusters', './parts/clusters_cat_improved')
+    except Exception:
+        unified_config = {}
+        clustering_config = {}
+        default_parts = './parts/extracted_cat_improved'
+        default_output = './parts/clusters_cat_improved'
+
     parser = argparse.ArgumentParser(description='Cluster extracted parts')
-    parser.add_argument('--parts-dir', type=str, default='./parts/extracted',
+    parser.add_argument('--parts-dir', type=str, default=default_parts,
                         help='Directory containing extracted parts')
-    parser.add_argument('--output-dir', type=str, default='./parts/clusters',
+    parser.add_argument('--output-dir', type=str, default=default_output,
                         help='Directory to save clustering results')
-    parser.add_argument('--n-clusters', type=int, default=100,
-                        help='Number of clusters (recommended: 100-200 for better granularity)')
-    parser.add_argument('--method', type=str, default='agglomerative',
+    parser.add_argument('--n-clusters', type=int, default=clustering_config.get('n_clusters', 100),
+                        help='Number of clusters')
+    parser.add_argument('--method', type=str, default=clustering_config.get('method', 'agglomerative'),
                         choices=['kmeans', 'agglomerative'],
                         help='Clustering method')
-    parser.add_argument('--visual-weight', type=float, default=1.5,
-                        help='Weight for ResNet visual features (primary signal)')
-    parser.add_argument('--spatial-weight', type=float, default=0.3)
-    parser.add_argument('--shape-weight', type=float, default=0.5)
-    parser.add_argument('--slot-weight', type=float, default=0.3,
-                        help='Weight for slot features (reduced - less discriminative alone)')
-    parser.add_argument('--refine', action='store_true', default=True,
+    parser.add_argument('--visual-weight', type=float, default=clustering_config.get('visual_weight', 1.5),
+                        help='Weight for ResNet visual features')
+    parser.add_argument('--spatial-weight', type=float, default=clustering_config.get('spatial_weight', 0.3))
+    parser.add_argument('--shape-weight', type=float, default=clustering_config.get('shape_weight', 0.5))
+    parser.add_argument('--slot-weight', type=float, default=clustering_config.get('slot_weight', 0.3),
+                        help='Weight for slot features')
+    parser.add_argument('--refine', action='store_true', default=clustering_config.get('refine', True),
                         help='Apply post-processing to merge small clusters')
-    parser.add_argument('--min-cluster-size', type=int, default=10,
-                        help='Minimum samples per cluster (smaller clusters get merged)')
+    parser.add_argument('--min-cluster-size', type=int, default=clustering_config.get('min_cluster_size', 10),
+                        help='Minimum samples per cluster')
 
     args = parser.parse_args()
     
