@@ -229,3 +229,51 @@ clustering:
   slot_weight: 0.3
   refine: true
   min_cluster_size: 10
+
+# ==============================================================================
+# DINO Concept-Grounded Parts Discovery Pipeline
+# ==============================================================================
+# INPUT:  Images from dataset.root (or dino.data_root if set).
+#         Expected layout: {root}/{class_name}/*.jpg  e.g. data/cat/img1.jpg
+# OUTPUT: All artifacts under cache/ (or paths below); classifier = concept_classifier.pkl
+# ==============================================================================
+dino:
+  model: dino_vits8
+  image_size: 224
+  patch_size: 8
+  device: mps
+  extract_batch_size: 32
+  pin_memory: false
+  cache_dir: cache/
+  # Input: data_root overrides dataset.root. If classes is set, only those class folders are used.
+  data_root: data/masked/train  # e.g. "data/masked/train" to use only that tree
+  classes: ["cat"]  # only these classes (subdir names under data_root); null = all classes
+  features_cache: cache/dino_features.pt
+  clusterer_path: cache/kmeans.pkl
+  cluster_labels_path: cache/cluster_labels.pt
+  force_recompute: true
+
+# DINO pipeline clustering (MiniBatchKMeans on patch features)
+clustering:
+  n_clusters: 12
+  n_init: 20
+  max_iter: 300
+  batch_size: 8192 #4096
+  random_seed: 42
+
+concepts:
+  labels_path: cache/labels.json
+  vectors_cache: cache/concept_vectors.pt
+  scores_cache: cache/concept_scores.pt
+
+# Concept classifier (linear probe on concept scores)
+classification:
+  C: 1.0
+  max_iter: 1000
+  test_size: 0.2
+  random_seed: 42
+  classifier_path: cache/concept_classifier.pkl
+  explanation_dir: cache/  # explanation_{image_stem}.png saved here
+
+wandb:
+  project: dino-parts-discovery
