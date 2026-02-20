@@ -19,11 +19,18 @@ n_clusters = cfg["clustering"]["n_clusters"]
 clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
 cluster_labels_path = cfg["dino"].get("cluster_labels_path", "cache/cluster_labels.pt")
 
+use_spatial = cfg["clustering"].get("use_spatial_features", False)
+spatial_weight = cfg["clustering"].get("spatial_weight", 0.15)
 clusterer = PatchClusterer(
     n_clusters=n_clusters,
     random_seed=cfg["clustering"].get("random_seed", 42),
+    use_spatial_features=use_spatial,
+    spatial_weight=spatial_weight,
 )
-labels = clusterer.fit(data["features"])
+labels = clusterer.fit(
+    data["features"],
+    patch_ids=data["patch_ids"] if use_spatial else None,
+)
 
 # Save clusterer and labels
 clusterer.save(clusterer_path)

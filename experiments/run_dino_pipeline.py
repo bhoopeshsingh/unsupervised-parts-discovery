@@ -115,6 +115,8 @@ def stage_explain(cfg, image_path: str):
     from src.models.dino_extractor import DinoExtractor
     from src.classification.concept_classifier import (
         ConceptClassifier,
+        get_spatial_concept_map,
+        render_dissertation_explanation,
         render_explanation,
     )
 
@@ -125,17 +127,21 @@ def stage_explain(cfg, image_path: str):
     )
     classifier_path = cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl")
     clf = ConceptClassifier.load(classifier_path)
-    saved = torch.load(
-        cfg["concepts"]["vectors_cache"], weights_only=False
-    )
+    saved = torch.load(cfg["concepts"]["vectors_cache"], weights_only=False)
     vectors = saved["vectors"]
     fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
-    img_feats = extractor.extract_foreground_patches(image_path, fg_threshold=fg_threshold)
-    result = clf.predict_with_explanation(img_feats, vectors)
+
+    # Extract all 784 patches + foreground mask (for spatial map)
+    all_feats, fg_mask = extractor.extract_all_patches_with_fg_mask(
+        image_path, fg_threshold=fg_threshold
+    )
+    # For scoring: use only foreground patches (matches training)
+    fg_feats = all_feats[fg_mask]
+    result = clf.predict_with_explanation(fg_feats, vectors)
 
     print(f"\nPrediction : {result['prediction']}")
     print(f"Confidence : {result['confidence']:.2%}")
-    print("\nConcept Activations:")
+    print("\nConcept Activations (sorted by strength):")
     for c, score in sorted(
         result["concept_scores"].items(),
         key=lambda x: x[1],
@@ -144,9 +150,27 @@ def stage_explain(cfg, image_path: str):
         bar = "█" * int(score * 20)
         print(f"  {c:20s} {score:.3f} {bar}")
 
+    # Build spatial concept map — assigns every patch to nearest concept
+    concept_map, _ = get_spatial_concept_map(clf.concept_names, vectors, all_feats)
+
     explanation_dir = cfg["classification"].get("explanation_dir", "cache/")
-    save_path = str(Path(explanation_dir) / f"explanation_{Path(image_path).stem}.png")
-    render_explanation(result, save_path=save_path)
+    stem = Path(image_path).stem
+
+    # Dissertation figure: image + semantic overlay + bar chart
+    dis_path = str(Path(explanation_dir) / f"explain_semantic_{stem}.png")
+    render_dissertation_explanation(
+        image_path=image_path,
+        concept_map=concept_map,
+        concept_names=clf.concept_names,
+        result=result,
+        fg_mask=fg_mask,
+        save_path=dis_path,
+    )
+
+    # Also save the original bar-chart-only explanation
+    bar_path = str(Path(explanation_dir) / f"explanation_{stem}.png")
+    render_explanation(result, save_path=bar_path)
+
     return result
 
 

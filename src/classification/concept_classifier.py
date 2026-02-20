@@ -33,7 +33,7 @@ class ConceptClassifier:
             C=C,
             max_iter=max_iter,
             random_state=random_state,
-            multi_class="auto",
+            class_weight="balanced",  # handles class imbalance (e.g. 3738 cats vs 400 birds)
         )
         self.scaler = StandardScaler()
         self.concept_names = None
@@ -161,6 +161,171 @@ class ConceptClassifier:
         obj.concept_names = payload["concept_names"]
         obj.class_names = payload["class_names"]
         return obj
+
+
+def get_spatial_concept_map(
+    concept_names: list,
+    concept_vectors: dict,
+    image_features: torch.Tensor,
+) -> tuple:
+    """
+    Assign each of the 784 image patches to its nearest concept by cosine similarity.
+
+    Args:
+        concept_names:   ordered list of concept name strings
+        concept_vectors: dict {name: tensor [384]}
+        image_features:  [784, 384] — ALL patch features for the image
+
+    Returns:
+        concept_map [28, 28] int  — concept index per patch
+        patch_sims  [784, N]  float — similarity of each patch to each concept
+    """
+    img_norm = F.normalize(image_features, dim=-1)  # [784, 384]
+    vecs = torch.stack([
+        F.normalize(concept_vectors[n].float(), dim=0) for n in concept_names
+    ])  # [N, 384]
+    patch_sims = (img_norm @ vecs.T).numpy()        # [784, N]
+    concept_idx = patch_sims.argmax(axis=1)         # [784]
+    return concept_idx.reshape(28, 28), patch_sims
+
+
+def render_dissertation_explanation(
+    image_path: str,
+    concept_map: np.ndarray,
+    concept_names: list,
+    result: dict,
+    fg_mask: np.ndarray = None,
+    save_path: str = None,
+):
+    """
+    Dissertation-quality 3-panel figure:
+      [Original image] | [Semantic part overlay] | [Concept activation bar chart]
+
+    Each patch in the overlay is coloured by its dominant concept (e.g. cat_ears,
+    cat_eyes, cat_fur).  Background patches (low attention) are dimmed.
+    """
+    from PIL import Image as PILImage
+    import matplotlib.patches as mpatches
+    import matplotlib.gridspec as gridspec
+
+    n_concepts = len(concept_names)
+    cmap = plt.cm.get_cmap("tab10", n_concepts)
+    concept_colors = {name: cmap(i)[:3] for i, name in enumerate(concept_names)}
+
+    # ---- load & resize image --------------------------------------------------
+    img = np.array(PILImage.open(image_path).convert("RGB").resize((224, 224)))
+
+    # ---- build semantic colour overlay ----------------------------------------
+    # concept_map: [28, 28] int → upsample to [224, 224]
+    map_upscaled = np.array(
+        PILImage.fromarray(concept_map.astype(np.uint8)).resize(
+            (224, 224), PILImage.NEAREST
+        )
+    )
+    # colour grid: each pixel gets concept colour
+    overlay = np.zeros((224, 224, 3), dtype=np.float32)
+    for idx, name in enumerate(concept_names):
+        mask = map_upscaled == idx
+        overlay[mask] = concept_colors[name]
+
+    # dim background patches
+    alpha = np.ones((224, 224), dtype=np.float32) * 0.6
+    if fg_mask is not None:
+        fg_28 = fg_mask.reshape(28, 28).numpy().astype(np.uint8)
+        fg_224 = np.array(
+            PILImage.fromarray(fg_28 * 255).resize((224, 224), PILImage.NEAREST)
+        ) / 255.0
+        alpha = 0.25 + 0.55 * fg_224   # background=0.25, foreground=0.80
+
+    blended = (img / 255.0) * (1 - alpha[:, :, None]) + overlay * alpha[:, :, None]
+    blended = np.clip(blended, 0, 1)
+
+    # ---- bar chart data -------------------------------------------------------
+    scores = result["concept_scores"]
+    contribs = result["contributions"]
+    sorted_names = sorted(concept_names, key=lambda c: abs(contribs[c]), reverse=True)
+    bar_values = [contribs[n] for n in sorted_names]
+    bar_scores = [scores[n] for n in sorted_names]
+    bar_colors = [
+        (*concept_colors[n], 0.85) for n in sorted_names
+    ]
+
+    # ---- layout ---------------------------------------------------------------
+    fig = plt.figure(figsize=(16, 6))
+    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 1.1], wspace=0.35)
+
+    # Panel 1 — original
+    ax0 = fig.add_subplot(gs[0])
+    ax0.imshow(img)
+    ax0.set_title("Input Image", fontsize=12, fontweight="bold")
+    ax0.axis("off")
+
+    # Panel 2 — semantic overlay
+    ax1 = fig.add_subplot(gs[1])
+    ax1.imshow(blended)
+    ax1.set_title("Semantic Part Map", fontsize=12, fontweight="bold")
+    ax1.axis("off")
+    legend_patches = [
+        mpatches.Patch(
+            facecolor=concept_colors[n],
+            edgecolor="white",
+            label=n.replace("_", " "),
+        )
+        for n in concept_names
+    ]
+    ax1.legend(
+        handles=legend_patches,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.28),
+        ncol=2,
+        fontsize=7.5,
+        frameon=True,
+        framealpha=0.9,
+    )
+
+    # Panel 3 — bar chart
+    ax2 = fig.add_subplot(gs[2])
+    y_pos = np.arange(len(sorted_names))
+    bars = ax2.barh(y_pos, bar_values, color=bar_colors, edgecolor="white", height=0.65)
+    for i, (bar, score) in enumerate(zip(bars, bar_scores)):
+        x_text = bar.get_width() + (max(bar_values) - min(bar_values)) * 0.02
+        ax2.text(
+            x_text, bar.get_y() + bar.get_height() / 2,
+            f"act={score:.2f}",
+            va="center", ha="left", fontsize=8, color="#444",
+        )
+    ax2.set_yticks(y_pos)
+    ax2.set_yticklabels(
+        [n.replace("_", " ") for n in sorted_names], fontsize=9
+    )
+    ax2.set_xlabel("Concept contribution\n(activation × weight)", fontsize=9)
+    ax2.axvline(0, color="grey", linewidth=0.8, linestyle="--")
+    ax2.spines[["top", "right"]].set_visible(False)
+    pred = result["prediction"].upper()
+    conf = result["confidence"]
+    ax2.set_title(
+        f"Prediction: {pred}  ({conf:.0%})",
+        fontsize=12,
+        fontweight="bold",
+        color="#1a237e" if pred == "CAT" else "#b71c1c",
+    )
+
+    # top concept summary below title
+    top3 = [n.replace("_", " ") for n in sorted_names[:3] if bar_scores[concept_names.index(n) if n in concept_names else 0] > 0.3]
+    if top3:
+        fig.text(
+            0.98, 0.02,
+            "Evidence: " + ", ".join(top3),
+            ha="right", va="bottom", fontsize=8.5, color="#555",
+            style="italic",
+        )
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Dissertation figure saved → {save_path}")
+    plt.close(fig)
+    return fig
 
 
 def render_explanation(result: dict, save_path: str = None):

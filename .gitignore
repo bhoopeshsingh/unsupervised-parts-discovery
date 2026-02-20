@@ -56,3 +56,7 @@ logs/
 
 # Data
 /data
+
+# DINO pipeline cache
+cache/*.pt
+cache/*.npy

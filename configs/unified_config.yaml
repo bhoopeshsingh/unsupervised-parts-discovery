@@ -220,7 +220,7 @@ filtering:
   min_std: 0.1
   min_bbox_size: 4
 
-clustering:
+slot_clustering:  # Legacy slot-attention clustering config — not used by DINO pipeline
   n_clusters: 100
   method: "agglomerative"
   visual_weight: 1.5
@@ -247,19 +247,27 @@ dino:
   cache_dir: cache/
   # Input: data_root overrides dataset.root. If classes is set, only those class folders are used.
   data_root: data/masked/train  # e.g. "data/masked/train" to use only that tree
-  classes: ["cat"]  # only these classes (subdir names under data_root); null = all classes
+  classes: ["bird", "cat"]  # only these classes (subdir names under data_root); null = all classes
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
-  force_recompute: true
+  force_recompute: false  # Set true only when re-extracting intentionally
+  fg_threshold: 0.5      # Foreground masking: keep top (1-fg_threshold) attended patches
+                         # 0.3 = keep top 70% (permissive), 0.5 = top 50% (balanced), 0.7 = top 30% (strict)
 
 # DINO pipeline clustering (MiniBatchKMeans on patch features)
 clustering:
-  n_clusters: 12
+  n_clusters: 10        # From find_optimal_k.py (best silhouette at 64-dim PCA)
   n_init: 20
   max_iter: 300
-  batch_size: 8192 #4096
+  batch_size: 8192
   random_seed: 42
+  # PCA: reduce feature dims before clustering — improves cluster quality and speeds up KMeans
+  use_pca: true         # Recommended: true
+  pca_dims: 64          # 384 → 64 dims; typically retains >90% variance
+  # Spatial: use patch position so eyes (top) and nose (center) tend to separate
+  use_spatial_features: true
+  spatial_weight: 0.3   # 0 = appearance only, higher = stronger position bias
 
 concepts:
   labels_path: cache/labels.json

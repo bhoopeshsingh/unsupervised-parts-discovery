@@ -54,9 +54,11 @@ def extract_all(config_path: str = "configs/unified_config.yaml"):
     if Path(cache_path).exists() and not dcfg.get("force_recompute", False):
         print(f"Cache exists at {cache_path}. Set force_recompute: true to re-run.")
         data = torch.load(cache_path, weights_only=False)
+        fg_threshold = data.get("fg_threshold", None)
+        fg_note = f", fg_threshold={fg_threshold}" if fg_threshold is not None else " (no foreground masking)"
         print(
-            f"Loaded: {data['features'].shape[0]} patches from "
-            f"{len(data['image_paths'])} images"
+            f"Loaded: {data['features'].shape[0]:,} patches from "
+            f"{len(data['image_paths'])} images{fg_note}"
         )
         return data
 
@@ -77,21 +79,60 @@ def extract_all(config_path: str = "configs/unified_config.yaml"):
         )
     print(f"Found {len(image_paths)} images across classes: {class_names}")
 
+    # Foreground masking: use DINO attention to drop background patches before clustering.
+    # The CLS token naturally attends more to foreground (object) than background.
+    # fg_threshold=0.5 means: keep only the top 50% most-attended patches per image.
+    # Set fg_threshold: null in config to disable masking and keep all patches.
+    fg_threshold = dcfg.get("fg_threshold", 0.5)
+    use_fg_mask = fg_threshold is not None
+    if use_fg_mask:
+        print(f"Foreground masking enabled (fg_threshold={fg_threshold}) — "
+              f"keeping top {(1 - fg_threshold) * 100:.0f}% attended patches per image.")
+    else:
+        print("Foreground masking disabled — all 784 patches per image will be kept.")
+
     all_features = []
     all_image_ids = []
     all_patch_ids = []
     all_labels = []
     failed = []
+    total_patches_before = 0
+    total_patches_after = 0
 
     for img_idx, (img_path, label) in enumerate(
         tqdm(zip(image_paths, image_labels), total=len(image_paths), desc="Extracting")
     ):
         try:
-            feats = extractor.extract_from_path(img_path)  # [784, 384]
-            all_features.append(feats)
-            all_image_ids.extend([img_idx] * 784)
-            all_patch_ids.extend(list(range(784)))
-            all_labels.extend([label] * 784)
+            img_tensor = extractor.load_image(img_path)          # [1, 3, 224, 224]
+            feats = extractor.extract_patches(img_tensor).squeeze(0).cpu()  # [784, 384]
+            total_patches_before += feats.shape[0]
+
+            if use_fg_mask:
+                # Attention shape: [1, num_heads, 785, 785]
+                # Index 0 is CLS token; its attention to the 784 patch tokens:
+                attn = extractor.extract_attention(img_tensor)   # [1, heads, 785, 785]
+                cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()  # [784] mean across heads
+                threshold = cls_attn.quantile(fg_threshold)
+                fg_mask = cls_attn > threshold                   # [784] boolean
+                fg_indices = fg_mask.nonzero(as_tuple=True)[0]  # indices of foreground patches
+
+                # Safety: if masking is too aggressive, fall back to top 25%
+                if len(fg_indices) < 10:
+                    fg_indices = cls_attn.topk(max(10, feats.shape[0] // 4)).indices
+
+                kept_feats = feats[fg_indices]                   # [K, 384]
+                kept_patch_ids = fg_indices.tolist()
+            else:
+                kept_feats = feats
+                kept_patch_ids = list(range(784))
+
+            n_kept = kept_feats.shape[0]
+            total_patches_after += n_kept
+            all_features.append(kept_feats)
+            all_image_ids.extend([img_idx] * n_kept)
+            all_patch_ids.extend(kept_patch_ids)
+            all_labels.extend([label] * n_kept)
+
         except Exception as e:
             print(f" Warning: failed on {img_path}: {e}")
             failed.append(img_path)
@@ -102,7 +143,12 @@ def extract_all(config_path: str = "configs/unified_config.yaml"):
             "No features extracted — check your data/ directory structure"
         )
 
-    features_tensor = torch.cat(all_features, dim=0)  # [N*784, 384]
+    features_tensor = torch.cat(all_features, dim=0)
+    if use_fg_mask:
+        reduction = (1 - total_patches_after / total_patches_before) * 100
+        print(f"Foreground masking: {total_patches_before:,} → {total_patches_after:,} patches "
+              f"({reduction:.1f}% background removed)")
+
     cache = {
         "features": features_tensor,
         "image_ids": torch.tensor(all_image_ids, dtype=torch.long),
@@ -113,6 +159,7 @@ def extract_all(config_path: str = "configs/unified_config.yaml"):
         "image_labels": image_labels,
         "grid_size": 28,
         "feat_dim": 384,
+        "fg_threshold": fg_threshold,   # record masking config used
     }
     Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
     torch.save(cache, cache_path)

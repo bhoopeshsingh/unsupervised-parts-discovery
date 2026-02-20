@@ -109,6 +109,24 @@ class DinoExtractor:
             fg_indices = cls_attn.topk(max(10, feats.shape[0] // 4)).indices
         return feats[fg_indices]                                 # [K, 384]
 
+    def extract_all_patches_with_fg_mask(
+        self, image_path, fg_threshold: float = 0.5
+    ) -> tuple:
+        """
+        Extract all 784 patch features plus a foreground mask.
+
+        Returns:
+            features [784, 384]  — all patch features (for spatial mapping)
+            fg_mask  [784] bool  — True where patch is foreground (by CLS attention)
+        """
+        tensor = self.load_image(image_path)
+        feats = self.extract_patches(tensor).squeeze(0).cpu()    # [784, 384]
+        attn = self.extract_attention(tensor)                     # [1, heads, 785, 785]
+        cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()          # [784]
+        threshold = cls_attn.quantile(fg_threshold)
+        fg_mask = cls_attn > threshold                            # [784] bool
+        return feats, fg_mask
+
     def get_spatial_grid(self):
         """Returns (grid_size, grid_size) = (28, 28)."""
         return self.grid_size, self.grid_size
