@@ -85,6 +85,30 @@ class DinoExtractor:
         tensor = self.load_image(image_path)
         return self.extract_patches(tensor).squeeze(0).cpu()  # [784, 384]
 
+    def extract_foreground_patches(
+        self, image_path, fg_threshold: float = 0.5
+    ) -> torch.Tensor:
+        """
+        Load image, extract patches, then mask to foreground using DINO attention.
+        Matches the foreground masking applied during batch feature extraction.
+
+        Args:
+            image_path: path to image file
+            fg_threshold: quantile threshold — keep patches with attention > this quantile.
+                          0.5 = keep top 50% (matches extract_dino_features.py default).
+        Returns:
+            foreground patch features [K, 384] where K <= 784
+        """
+        tensor = self.load_image(image_path)
+        feats = self.extract_patches(tensor).squeeze(0).cpu()   # [784, 384]
+        attn = self.extract_attention(tensor)                    # [1, heads, 785, 785]
+        cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()         # [784] mean across heads
+        threshold = cls_attn.quantile(fg_threshold)
+        fg_indices = (cls_attn > threshold).nonzero(as_tuple=True)[0]
+        if len(fg_indices) < 10:
+            fg_indices = cls_attn.topk(max(10, feats.shape[0] // 4)).indices
+        return feats[fg_indices]                                 # [K, 384]
+
     def get_spatial_grid(self):
         """Returns (grid_size, grid_size) = (28, 28)."""
         return self.grid_size, self.grid_size

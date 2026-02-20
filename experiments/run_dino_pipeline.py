@@ -35,12 +35,27 @@ def stage_cluster(cfg):
     from src.parts.patch_clusterer import PatchClusterer
 
     data = torch.load(cfg["dino"]["features_cache"], weights_only=False)
-    n_clusters = cfg["clustering"]["n_clusters"]
+    ccfg = cfg["clustering"]
+    use_spatial = ccfg.get("use_spatial_features", False)
+    use_pca = ccfg.get("use_pca", False)
+    pca_dims = ccfg.get("pca_dims", 64)
+
+    print(f"  n_clusters={ccfg['n_clusters']}, use_pca={use_pca}"
+          + (f" (→{pca_dims}d)" if use_pca else "")
+          + f", use_spatial={use_spatial}")
+
     clusterer = PatchClusterer(
-        n_clusters=n_clusters,
-        random_seed=cfg["clustering"].get("random_seed", 42),
+        n_clusters=ccfg["n_clusters"],
+        random_seed=ccfg.get("random_seed", 42),
+        use_spatial_features=use_spatial,
+        spatial_weight=ccfg.get("spatial_weight", 0.15),
+        use_pca=use_pca,
+        pca_dims=pca_dims,
     )
-    labels = clusterer.fit(data["features"])
+    labels = clusterer.fit(
+        data["features"],
+        patch_ids=data["patch_ids"] if use_spatial else None,
+    )
     cluster_labels_path = cfg["dino"].get("cluster_labels_path", "cache/cluster_labels.pt")
     clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
     torch.save(torch.tensor(labels), cluster_labels_path)
@@ -114,7 +129,8 @@ def stage_explain(cfg, image_path: str):
         cfg["concepts"]["vectors_cache"], weights_only=False
     )
     vectors = saved["vectors"]
-    img_feats = extractor.extract_from_path(image_path)  # [784, 384]
+    fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
+    img_feats = extractor.extract_foreground_patches(image_path, fg_threshold=fg_threshold)
     result = clf.predict_with_explanation(img_feats, vectors)
 
     print(f"\nPrediction : {result['prediction']}")
