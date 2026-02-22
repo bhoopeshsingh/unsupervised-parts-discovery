@@ -61,7 +61,6 @@ dino:
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
-  force_recompute: false
   fg_threshold: 0.5                 # keep top (1-fg_threshold) attended patches
                                     # 0.5 = top 50% (balanced)
 

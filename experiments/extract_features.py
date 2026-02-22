@@ -51,17 +51,6 @@ def extract_all(config_path: str = "configs/config.yaml"):
     dcfg = cfg["dino"]
     cache_path = dcfg["features_cache"]
 
-    if Path(cache_path).exists() and not dcfg.get("force_recompute", False):
-        print(f"Cache exists at {cache_path}. Set force_recompute: true to re-run.")
-        data = torch.load(cache_path, weights_only=False)
-        fg_threshold = data.get("fg_threshold", None)
-        fg_note = f", fg_threshold={fg_threshold}" if fg_threshold is not None else " (no foreground masking)"
-        print(
-            f"Loaded: {data['features'].shape[0]:,} patches from "
-            f"{len(data['image_paths'])} images{fg_note}"
-        )
-        return data
-
     extractor = DinoExtractor(
         model_name=dcfg["model"],
         device=dcfg["device"],

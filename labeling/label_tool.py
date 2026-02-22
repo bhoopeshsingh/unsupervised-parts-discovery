@@ -64,55 +64,45 @@ def analyze_cluster_foreground_likelihood(cluster_centers, labels_arr):
     return scores
 
 
-def compute_patch_quality_cache(data, labels_arr, cache_path='cache/patch_quality.pt'):
-    """Pre-compute quality scores for ALL patches once, save to disk."""
-    if Path(cache_path).exists():
-        return torch.load(cache_path, weights_only=False)
-    
-    print('Computing patch quality scores (one-time, ~2-3 min)...')
+def compute_patch_quality(data, labels_arr):
+    """Compute quality scores for all patches."""
     n_patches = len(data['image_ids'])
     brightness_scores = np.zeros(n_patches, dtype=np.float32)
     variance_scores   = np.zeros(n_patches, dtype=np.float32)
     spatial_centrality = np.zeros(n_patches, dtype=np.float32)
-    
+
     n_images = len(data['image_paths'])
-    
-    for img_idx in tqdm(range(n_images), desc='Processing images'):
+
+    for img_idx in tqdm(range(n_images), desc='Computing patch quality'):
         try:
             img_path = data['image_paths'][img_idx]
             img = Image.open(img_path).convert('RGB').resize((224, 224))
             img_arr = np.array(img, dtype=np.float32)
-            
+
             mask = (data['image_ids'] == img_idx).numpy()
             patch_indices = np.where(mask)[0]
-            
-            for local_idx, global_idx in enumerate(patch_indices):
+
+            for global_idx in patch_indices:
                 patch_idx = data['patch_ids'][global_idx].item()
                 row_p = patch_idx // 28
                 col_p = patch_idx % 28
                 r0, c0 = row_p * 8, col_p * 8
-                
+
                 patch = img_arr[r0:r0+8, c0:c0+8]
                 if patch.size > 0:
                     brightness_scores[global_idx] = patch.mean() / 255.0
                     variance_scores[global_idx]   = patch.std()
-                    
-                    # Spatial: distance from center (14, 14)
                     center_dist = np.sqrt((row_p - 14)**2 + (col_p - 14)**2)
                     spatial_centrality[global_idx] = 1.0 / (1.0 + center_dist / 10.0)
         except Exception:
             continue
-    
-    quality_cache = {
+
+    return {
         'brightness': torch.from_numpy(brightness_scores),
         'variance': torch.from_numpy(variance_scores),
         'spatial_centrality': torch.from_numpy(spatial_centrality),
         'n_patches': n_patches
     }
-    
-    torch.save(quality_cache, cache_path)
-    print(f'Saved to {cache_path}')
-    return quality_cache
 
 
 def compute_cluster_spatial_stats(cluster_id, data, labels_arr):
@@ -467,10 +457,10 @@ def run_streamlit():
             )
         fg_scores = st.session_state.fg_scores
 
-        # Initialize patch quality cache
+        # Compute patch quality scores (kept in session memory)
         if 'quality_cache' not in st.session_state:
-            with st.spinner('Computing patch quality (one-time, ~2-3 min)...'):
-                st.session_state.quality_cache = compute_patch_quality_cache(data, labels_arr)
+            with st.spinner('Computing patch quality (~2-3 min)...'):
+                st.session_state.quality_cache = compute_patch_quality(data, labels_arr)
         quality_cache = st.session_state.quality_cache
 
         # Load existing labels
