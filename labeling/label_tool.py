@@ -22,7 +22,7 @@ import torch.nn.functional as F
 import cv2
 
 
-def load_data(config_path='configs/unified_config.yaml'):
+def load_data(config_path='configs/config.yaml'):
     """Load cached data."""
     cfg  = yaml.safe_load(open(config_path))
     data = torch.load(cfg['dino']['features_cache'], weights_only=False)
@@ -254,7 +254,7 @@ def load_dino_extractor(model_name: str, device: str, image_size: int):
 
 @st.cache_resource(show_spinner="Loading classifier…")
 def load_classifier_and_vectors(classifier_path: str, vectors_path: str):
-    from src.classification.concept_classifier import ConceptClassifier
+    from src.pipeline.concept_classifier import ConceptClassifier
     clf = ConceptClassifier.load(classifier_path)
     saved = torch.load(vectors_path, weights_only=False)
     return clf, saved["vectors"]
@@ -262,7 +262,7 @@ def load_classifier_and_vectors(classifier_path: str, vectors_path: str):
 
 def run_classify_tab(cfg):
     """Classify & Explain tab: upload image → prediction + semantic part map."""
-    from src.classification.concept_classifier import (
+    from src.pipeline.concept_classifier import (
         get_spatial_concept_map,
         render_dissertation_explanation,
     )
@@ -282,7 +282,7 @@ def run_classify_tab(cfg):
     if missing:
         st.error(
             "Pipeline cache files not found. Run the full pipeline first:\n"
-            "```\npython experiments/run_dino_pipeline.py --stage all\n```\n"
+            "```\npython experiments/run_pipeline.py --stage all\n```\n"
             f"Missing: {missing}"
         )
         return
@@ -624,7 +624,7 @@ def run_streamlit():
         labeled_count = sum(1 for v in existing.values() if v.get('label', ''))
         if labeled_count == n_clusters:
            # st.balloons()
-            st.success('🎉 All clusters labeled! Run: python experiments/run_dino_pipeline.py --stage concepts')
+            st.success('🎉 All clusters labeled! Run: python experiments/run_pipeline.py --stage concepts')
 
 
 if __name__ == '__main__':

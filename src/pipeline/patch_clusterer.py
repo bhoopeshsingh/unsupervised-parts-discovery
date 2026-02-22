@@ -1,4 +1,4 @@
-# src/parts/patch_clusterer.py
+# src/pipeline/patch_clusterer.py
 """
 Patch clusterer using MiniBatchKMeans on DINO patch features.
 Produces part maps (28x28 cluster labels per image) and visualisation helpers.

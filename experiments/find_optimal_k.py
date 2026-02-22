@@ -5,7 +5,7 @@ for the DINO patch feature space.
 
 Usage:
     python experiments/find_optimal_k.py
-    python experiments/find_optimal_k.py --k_min 5 --k_max 30 --config configs/unified_config.yaml
+    python experiments/find_optimal_k.py --k_min 5 --k_max 30 --config configs/config.yaml
 
 Output:
     - Prints silhouette scores and inertia for each K
@@ -32,7 +32,7 @@ from sklearn.decomposition import PCA
 
 
 def run_analysis(
-    config_path: str = "configs/unified_config.yaml",
+    config_path: str = "configs/config.yaml",
     k_min: int = 5,
     k_max: int = 30,
     k_step: int = 1,
@@ -53,7 +53,7 @@ def run_analysis(
     cache_path = cfg["dino"]["features_cache"]
     if not Path(cache_path).exists():
         print(f"ERROR: Feature cache not found at {cache_path}")
-        print("Run extraction first: python experiments/run_dino_pipeline.py --stage extract")
+        print("Run extraction first: python experiments/run_pipeline.py --stage extract")
         sys.exit(1)
 
     print(f"Loading features from {cache_path} ...")
@@ -175,7 +175,7 @@ def run_analysis(
         print("(acceptable ★★)")
     else:
         print("(weak — consider foreground masking or PCA if not used ★)")
-    print(f"\n  Update configs/unified_config.yaml:")
+    print(f"\n  Update configs/config.yaml:")
     print(f"    clustering:")
     print(f"      n_clusters: {best_k}")
     print("=" * 50)
@@ -185,7 +185,7 @@ def run_analysis(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/unified_config.yaml")
+    parser.add_argument("--config", default="configs/config.yaml")
     parser.add_argument("--k_min", type=int, default=5)
     parser.add_argument("--k_max", type=int, default=30)
     parser.add_argument("--k_step", type=int, default=1)

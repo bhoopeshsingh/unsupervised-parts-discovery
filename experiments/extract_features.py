@@ -1,4 +1,4 @@
-# experiments/extract_dino_features.py
+# experiments/extract_features.py
 """
 One-time DINO feature extraction for all images in data/.
 Saves to cache/dino_features.pt — all subsequent steps load from here.
@@ -45,7 +45,7 @@ def collect_images(data_dir: str, classes_filter=None):
     return paths, labels, class_names
 
 
-def extract_all(config_path: str = "configs/unified_config.yaml"):
+def extract_all(config_path: str = "configs/config.yaml"):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
     dcfg = cfg["dino"]

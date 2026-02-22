@@ -95,7 +95,7 @@ class DinoExtractor:
         Args:
             image_path: path to image file
             fg_threshold: quantile threshold — keep patches with attention > this quantile.
-                          0.5 = keep top 50% (matches extract_dino_features.py default).
+                          0.5 = keep top 50% (matches extract_features.py default).
         Returns:
             foreground patch features [K, 384] where K <= 784
         """

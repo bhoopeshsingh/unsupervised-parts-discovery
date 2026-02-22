@@ -1,4 +1,4 @@
-# src/concepts/concept_builder.py
+# src/pipeline/concept_builder.py
 """
 Build concept vectors from human-labeled clusters and compute concept scores.
 """
@@ -12,7 +12,7 @@ import yaml
 
 
 def build_concept_vectors(
-    config_path: str = "configs/unified_config.yaml",
+    config_path: str = "configs/config.yaml",
 ) -> dict:
     """
     For each labeled, included cluster: compute the mean DINO feature vector.
@@ -66,7 +66,7 @@ def build_concept_vectors(
 
 
 def compute_concept_scores_all(
-    config_path: str = "configs/unified_config.yaml",
+    config_path: str = "configs/config.yaml",
 ):
     """
     Pre-compute concept activation scores for every image.

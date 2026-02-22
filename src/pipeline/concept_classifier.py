@@ -1,4 +1,4 @@
-# src/classification/concept_classifier.py
+# src/pipeline/concept_classifier.py
 """
 Linear probe classifier on concept activation scores with explainability.
 """

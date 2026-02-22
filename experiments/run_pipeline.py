@@ -1,13 +1,13 @@
-# experiments/run_dino_pipeline.py
+# experiments/run_pipeline.py
 """
 End-to-end DINO parts discovery pipeline.
 Runs all stages in sequence, logs to W&B.
 
 Usage:
-  python experiments/run_dino_pipeline.py --stage all
-  python experiments/run_dino_pipeline.py --stage cluster
-  python experiments/run_dino_pipeline.py --stage classify
-  python experiments/run_dino_pipeline.py --stage explain --image path/to/image.jpg
+  python experiments/run_pipeline.py --stage all
+  python experiments/run_pipeline.py --stage cluster
+  python experiments/run_pipeline.py --stage classify
+  python experiments/run_pipeline.py --stage explain --image path/to/image.jpg
 """
 import argparse
 import os
@@ -24,7 +24,7 @@ def stage_extract(cfg):
     print("\n" + "=" * 60)
     print("STAGE 1+2: Feature Extraction + Caching")
     print("=" * 60)
-    from experiments.extract_dino_features import extract_all
+    from experiments.extract_features import extract_all
     return extract_all()
 
 
@@ -32,7 +32,7 @@ def stage_cluster(cfg):
     print("\n" + "=" * 60)
     print("STAGE 3: Patch Clustering")
     print("=" * 60)
-    from src.parts.patch_clusterer import PatchClusterer
+    from src.pipeline.patch_clusterer import PatchClusterer
 
     data = torch.load(cfg["dino"]["features_cache"], weights_only=False)
     ccfg = cfg["clustering"]
@@ -67,7 +67,7 @@ def stage_concepts(cfg):
     print("\n" + "=" * 60)
     print("STAGE 4+5: Build Concept Vectors + Compute Scores")
     print("=" * 60)
-    from src.concepts.concept_builder import (
+    from src.pipeline.concept_builder import (
         build_concept_vectors,
         compute_concept_scores_all,
     )
@@ -81,7 +81,7 @@ def stage_classify(cfg):
     print("\n" + "=" * 60)
     print("STAGE 6: Concept Classification")
     print("=" * 60)
-    from src.classification.concept_classifier import ConceptClassifier
+    from src.pipeline.concept_classifier import ConceptClassifier
 
     scores_data = torch.load(
         cfg["concepts"]["scores_cache"], weights_only=False
@@ -113,7 +113,7 @@ def stage_explain(cfg, image_path: str):
     print(f"STAGE 7: Explain prediction for {image_path}")
     print("=" * 60)
     from src.models.dino_extractor import DinoExtractor
-    from src.classification.concept_classifier import (
+    from src.pipeline.concept_classifier import (
         ConceptClassifier,
         get_spatial_concept_map,
         render_dissertation_explanation,
@@ -222,7 +222,7 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default="configs/unified_config.yaml",
+        default="configs/config.yaml",
     )
     args = parser.parse_args()
     with open(args.config) as f:
@@ -242,7 +242,7 @@ def main():
         if not Path(cfg["concepts"]["scores_cache"]).exists():
             print(
                 "ERROR: concept scores not found. Run concepts stage first: "
-                "python experiments/run_dino_pipeline.py --stage concepts"
+                "python experiments/run_pipeline.py --stage concepts"
             )
             sys.exit(1)
         clf, acc = stage_classify(cfg)

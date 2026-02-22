@@ -1,0 +1,105 @@
+# config.yaml — Unsupervised Parts Discovery (DINO pipeline)
+# ==============================================================================
+# DATA
+# ==============================================================================
+dataset:
+  name: "custom"
+  root: "data"
+  custom_path: "data/masked/train/cat"
+  download: true
+
+paths:
+  classes:
+    - "cat"
+  train_split: 0.9
+  val_split: 0.1
+  img_size: 128
+  num_channels: 3
+
+augmentation:
+  train:
+    random_crop: true
+    crop_size: 128
+    padding: 4
+    horizontal_flip: true
+    flip_prob: 0.5
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+  val:
+    resize: 128
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: true
+
+seed: 42
+device: "mps"   # mps = M-series Mac | cuda = NVIDIA | cpu = fallback
+
+# ==============================================================================
+# DINO FEATURE EXTRACTION
+# ==============================================================================
+# INPUT:  images under dino.data_root/{class}/*.png
+# OUTPUT: cache/dino_features.pt  [N_patches, 384]
+# ==============================================================================
+dino:
+  model: dino_vits8
+  image_size: 224
+  patch_size: 8
+  device: mps
+  extract_batch_size: 32
+  pin_memory: false
+  cache_dir: cache/
+  data_root: data/masked/train
+  classes: ["bird", "cat"]          # subdirectory names to include; null = all
+  features_cache: cache/dino_features.pt
+  clusterer_path: cache/kmeans.pkl
+  cluster_labels_path: cache/cluster_labels.pt
+  force_recompute: false
+  fg_threshold: 0.5                 # keep top (1-fg_threshold) attended patches
+                                    # 0.5 = top 50% (balanced)
+
+# ==============================================================================
+# CLUSTERING  (MiniBatchKMeans on DINO patch features)
+# ==============================================================================
+clustering:
+  n_clusters: 10                    # chosen via find_optimal_k.py
+  n_init: 20
+  max_iter: 300
+  batch_size: 8192
+  random_seed: 42
+  use_pca: true                     # 384 → 64 dims (~90% variance retained)
+  pca_dims: 64
+  use_spatial_features: true        # weight patch position during clustering
+  spatial_weight: 0.3
+
+# ==============================================================================
+# CONCEPT LABELING  (human-in-the-loop via labeling/label_tool.py)
+# ==============================================================================
+concepts:
+  labels_path: cache/labels.json
+  vectors_cache: cache/concept_vectors.pt
+  scores_cache: cache/concept_scores.pt
+
+# ==============================================================================
+# CLASSIFICATION  (linear probe on concept activation scores)
+# ==============================================================================
+classification:
+  C: 1.0
+  max_iter: 1000
+  test_size: 0.2
+  random_seed: 42
+  classifier_path: cache/concept_classifier.pkl
+  explanation_dir: cache/
+
+# ==============================================================================
+# EXPERIMENT TRACKING
+# ==============================================================================
+wandb:
+  project: dino-parts-discovery

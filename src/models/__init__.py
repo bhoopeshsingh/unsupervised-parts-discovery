@@ -1,6 +1,6 @@
-"""Model architectures"""
+"""DINO model wrappers"""
 
-from .backbone import ResNetBackbone
-from .classifier import Classifier
+from .dino_extractor import DinoExtractor
+from .dino_finetuner import DinoSemanticFinetuner
 
-__all__ = ["ResNetBackbone", "Classifier"]
+__all__ = ["DinoExtractor", "DinoSemanticFinetuner"]

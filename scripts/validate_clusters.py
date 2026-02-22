@@ -11,9 +11,9 @@ import numpy as np
 import torch
 import yaml
 
-from src.parts.patch_clusterer import PatchClusterer, visualise_part_map
+from src.pipeline.patch_clusterer import PatchClusterer, visualise_part_map
 
-cfg = yaml.safe_load(open("configs/unified_config.yaml"))
+cfg = yaml.safe_load(open("configs/config.yaml"))
 data = torch.load(cfg["dino"]["features_cache"], weights_only=False)
 n_clusters = cfg["clustering"]["n_clusters"]
 clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
