@@ -244,8 +244,8 @@ def load_dino_extractor(model_name: str, device: str, image_size: int):
 
 @st.cache_resource(show_spinner="Loading classifier…")
 def load_classifier_and_vectors(classifier_path: str, vectors_path: str):
-    from src.pipeline.concept_classifier import ConceptClassifier
-    clf = ConceptClassifier.load(classifier_path)
+    from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
+    clf = CatConceptOneClassClassifier.load(classifier_path)
     saved = torch.load(vectors_path, weights_only=False)
     return clf, saved["vectors"]
 
@@ -302,7 +302,7 @@ def run_classify_tab(cfg):
     col_prev.image(pil_img, caption="Uploaded image", use_container_width=True)
     col_info.markdown(f"**Filename:** `{uploaded.name}`")
     col_info.markdown(f"**Size:** {pil_img.width} × {pil_img.height} px")
-    col_info.markdown(f"**Concepts available:** {', '.join(clf.concept_names)}")
+    col_info.markdown(f"**Concepts available:** {', '.join(list(vectors.keys()))}")
 
     classify_btn = col_info.button("🔍 Classify", type="primary", use_container_width=True)
 
@@ -322,18 +322,39 @@ def run_classify_tab(cfg):
             tmp_path, fg_threshold=fg_threshold
         )
         fg_feats = all_feats[fg_mask]
-        result = clf.predict_with_explanation(fg_feats, vectors)
+        concept_names = list(vectors.keys())
+
+        # Per-concept activation scores (max cosine similarity across fg patches)
+        img_norm = F.normalize(fg_feats, dim=-1)
+        concept_scores_dict = {}
+        for c_name, vec in vectors.items():
+            v_norm = F.normalize(vec.unsqueeze(0), dim=1).squeeze(0)
+            concept_scores_dict[c_name] = (img_norm @ v_norm).max().item()
+
+        score_vec = np.array([[concept_scores_dict[c] for c in concept_names]])
+        preds, _, confs = clf.predict(score_vec)
+        explanation = clf.explain(score_vec, concept_names)
+
+        result = {
+            "prediction": preds[0],
+            "confidence": float(confs[0]),
+            "concept_scores": concept_scores_dict,
+            # deviation_from_cat: positive = above typical cat = pushes toward cat
+            "contributions": {
+                item["concept"]: item["deviation_from_cat"] for item in explanation
+            },
+        }
         concept_map, patch_sims = get_spatial_concept_map(
-            clf.concept_names, vectors, all_feats
+            concept_names, vectors, all_feats
         )
         os.unlink(tmp_path)
 
     # ── prediction banner ──────────────────────────────────────
-    pred = result["prediction"].upper()
+    pred = result["prediction"].upper()   # "CAT" or "NOT_CAT"
     conf = result["confidence"]
     is_cat = pred == "CAT"
     banner_color = "#1a237e" if is_cat else "#b71c1c"
-    emoji = "🐱" if is_cat else "🐦"
+    emoji = "🐱" if is_cat else "❓"
 
     st.markdown(
         f"""
@@ -361,7 +382,7 @@ def run_classify_tab(cfg):
         fig = render_dissertation_explanation(
             image_path=tmp_path,
             concept_map=concept_map,
-            concept_names=clf.concept_names,
+            concept_names=concept_names,
             result=result,
             fg_mask=fg_mask,
             save_path=None,          # we'll render inline
@@ -384,40 +405,40 @@ def run_classify_tab(cfg):
             {
                 "Concept": n.replace("_", " "),
                 "Activation": round(scores[n], 3),
-                "Contribution": round(contribs[n], 4),
-                "Role": "→ " + pred if contribs[n] >= 0 else "→ other",
+                "Deviation from cat": round(contribs[n], 4),
+                "Role": "→ cat" if contribs[n] >= 0 else "→ not cat",
             }
-            for n in clf.concept_names
+            for n in concept_names
         ],
-        key=lambda r: abs(r["Contribution"]),
+        key=lambda r: abs(r["Deviation from cat"]),
         reverse=True,
     )
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
     # ── plain-language explanation ─────────────────────────────
     st.subheader("Plain-language explanation")
-    top_positive = [
+    top_cat = [
         r["Concept"]
         for r in rows
-        if r["Contribution"] > 0 and r["Activation"] > 0.6
+        if r["Deviation from cat"] > 0 and r["Activation"] > 0.6
     ][:3]
-    top_negative = [
+    top_absent = [
         r["Concept"]
         for r in rows
-        if r["Contribution"] < 0 and r["Activation"] > 0.6
+        if r["Deviation from cat"] < 0 and r["Activation"] > 0.6
     ][:2]
 
     if is_cat:
-        evidence = ", ".join(f"**{c}**" for c in top_positive) if top_positive else "several cat-like textures"
+        evidence = ", ".join(f"**{c}**" for c in top_cat) if top_cat else "several cat-like textures"
         st.success(
             f"This image is classified as a **CAT** ({conf:.0%} confidence) because the "
             f"system detected {evidence} — semantic parts labelled by a human annotator."
         )
     else:
-        evidence = ", ".join(f"**{c}**" for c in top_negative) if top_negative else "low cat-part activation"
+        absent = ", ".join(f"**{c}**" for c in top_absent) if top_absent else "cat part activations"
         st.warning(
-            f"This image is classified as **NOT CAT / {pred}** ({conf:.0%} confidence). "
-            f"The strongest cat-part signals ({evidence}) were absent or weak."
+            f"This image is classified as **NOT A CAT** ({conf:.0%} confidence). "
+            f"The expected cat-part signals ({absent}) were absent or weaker than a typical cat."
         )
 
     if top_positive:

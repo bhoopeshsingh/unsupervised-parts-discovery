@@ -15,7 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 import yaml
 from pathlib import Path
 
@@ -79,33 +81,31 @@ def stage_concepts(cfg):
 
 def stage_classify(cfg):
     print("\n" + "=" * 60)
-    print("STAGE 6: Concept Classification")
+    print("STAGE 6: One-Class Concept Classifier  (cat vs not-cat)")
     print("=" * 60)
-    from src.pipeline.concept_classifier import ConceptClassifier
+    from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
 
     scores_data = torch.load(
         cfg["concepts"]["scores_cache"], weights_only=False
     )
-    scores = scores_data["scores"]
+    scores = scores_data["scores"].numpy()
     concept_names = scores_data["concept_names"]
-    image_labels = scores_data["image_labels"]
-    class_names = scores_data["class_names"]
 
-    clf = ConceptClassifier(
-        C=cfg["classification"]["C"],
-        max_iter=cfg["classification"]["max_iter"],
-        random_state=cfg["classification"].get("random_seed", 42),
+    print(f"Training on {len(scores)} cat images × {len(concept_names)} concepts")
+    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.1)
+    clf.fit(scores)
+
+    # Report: how many training images score as "cat"
+    preds, dec_scores, confs = clf.predict(scores)
+    cat_rate = sum(p == "cat" for p in preds) / len(preds)
+    print(f"Cat recall (train): {cat_rate:.1%}  |  avg confidence: {confs.mean():.3f}")
+
+    classifier_path = cfg["classification"].get(
+        "classifier_path", "cache/concept_classifier.pkl"
     )
-    acc = clf.fit(
-        scores,
-        image_labels,
-        concept_names,
-        class_names,
-        test_size=cfg["classification"].get("test_size", 0.2),
-    )
-    classifier_path = cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl")
     clf.save(classifier_path)
-    return clf, acc
+    print(f"Saved one-class classifier → {classifier_path}")
+    return clf
 
 
 def stage_explain(cfg, image_path: str):
@@ -113,8 +113,8 @@ def stage_explain(cfg, image_path: str):
     print(f"STAGE 7: Explain prediction for {image_path}")
     print("=" * 60)
     from src.models.dino_extractor import DinoExtractor
+    from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
     from src.pipeline.concept_classifier import (
-        ConceptClassifier,
         get_spatial_concept_map,
         render_dissertation_explanation,
         render_explanation,
@@ -125,49 +125,65 @@ def stage_explain(cfg, image_path: str):
         device=cfg["dino"]["device"],
         image_size=cfg["dino"]["image_size"],
     )
-    classifier_path = cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl")
-    clf = ConceptClassifier.load(classifier_path)
+    classifier_path = cfg["classification"].get(
+        "classifier_path", "cache/concept_classifier.pkl"
+    )
+    clf = CatConceptOneClassClassifier.load(classifier_path)
     saved = torch.load(cfg["concepts"]["vectors_cache"], weights_only=False)
     vectors = saved["vectors"]
+    concept_names = list(vectors.keys())
     fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
 
-    # Extract all 784 patches + foreground mask (for spatial map)
+    # Extract all 784 patches + foreground mask
     all_feats, fg_mask = extractor.extract_all_patches_with_fg_mask(
         image_path, fg_threshold=fg_threshold
     )
-    # For scoring: use only foreground patches (matches training)
     fg_feats = all_feats[fg_mask]
-    result = clf.predict_with_explanation(fg_feats, vectors)
+
+    # Compute per-concept activation scores (max cosine sim across fg patches)
+    img_norm = F.normalize(fg_feats, dim=-1)
+    concept_scores = {}
+    for c_name, vec in vectors.items():
+        v_norm = F.normalize(vec.unsqueeze(0), dim=1).squeeze(0)
+        concept_scores[c_name] = (img_norm @ v_norm).max().item()
+
+    score_vec = np.array([[concept_scores[c] for c in concept_names]])
+    preds, _, confs = clf.predict(score_vec)
+    explanation = clf.explain(score_vec, concept_names)
+
+    result = {
+        "prediction": preds[0],
+        "confidence": float(confs[0]),
+        "concept_scores": concept_scores,
+        # deviation_from_cat: positive = above typical cat = pushes toward cat
+        "contributions": {
+            item["concept"]: item["deviation_from_cat"] for item in explanation
+        },
+    }
 
     print(f"\nPrediction : {result['prediction']}")
     print(f"Confidence : {result['confidence']:.2%}")
     print("\nConcept Activations (sorted by strength):")
-    for c, score in sorted(
-        result["concept_scores"].items(),
-        key=lambda x: x[1],
-        reverse=True,
-    ):
+    for c, score in sorted(concept_scores.items(), key=lambda x: x[1], reverse=True):
         bar = "█" * int(score * 20)
         print(f"  {c:20s} {score:.3f} {bar}")
 
-    # Build spatial concept map — assigns every patch to nearest concept
-    concept_map, _ = get_spatial_concept_map(clf.concept_names, vectors, all_feats)
+    # Spatial concept map — assigns every patch to nearest concept
+    concept_map, _ = get_spatial_concept_map(concept_names, vectors, all_feats)
 
     explanation_dir = cfg["classification"].get("explanation_dir", "cache/")
     stem = Path(image_path).stem
 
-    # Dissertation figure: image + semantic overlay + bar chart
     dis_path = str(Path(explanation_dir) / f"explain_semantic_{stem}.png")
     render_dissertation_explanation(
         image_path=image_path,
         concept_map=concept_map,
-        concept_names=clf.concept_names,
+        concept_names=concept_names,
         result=result,
         fg_mask=fg_mask,
         save_path=dis_path,
     )
 
-    # Also save the original bar-chart-only explanation
     bar_path = str(Path(explanation_dir) / f"explanation_{stem}.png")
     render_explanation(result, save_path=bar_path)
 
@@ -245,11 +261,11 @@ def main():
                 "python experiments/run_pipeline.py --stage concepts"
             )
             sys.exit(1)
-        clf, acc = stage_classify(cfg)
+        clf = stage_classify(cfg)
         scores_data = torch.load(
             cfg["concepts"]["scores_cache"], weights_only=False
         )
-        log_to_wandb(cfg, acc, scores_data["concept_names"])
+        log_to_wandb(cfg, 0.0, scores_data["concept_names"])
     if args.stage == "explain":
         if not args.image:
             print("ERROR: --image required for explain stage")

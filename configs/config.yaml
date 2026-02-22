@@ -57,7 +57,7 @@ dino:
   pin_memory: false
   cache_dir: cache/
   data_root: data/masked/train
-  classes: ["bird", "cat"]          # subdirectory names to include; null = all
+  classes: ["cat"]                  # cat only — concept discovery must be pure
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
