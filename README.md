@@ -1,107 +1,86 @@
-# Unsupervised Parts Discovery Pipeline
+# Unsupervised Parts Discovery — DINO Pipeline
 
-## Quick Start (4-Day Plan)
+> **Dissertation**: Learning Interpretable Feature Spaces via Domain-Informed Encoders
+> **Application**: Explainable classification for medical image analysis (positive/negative cases)
+> **Proof-of-concept domain**: Cat (positive) vs non-cat (negative) on masked image dataset
 
-### Setup
-
-```bash
-cd /Users/dev/ml-projects/unsupervised-parts-discovery
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Login to Weights & Biases
-wandb login
-```
-
-### Day 1: Test Data & Start Part Discovery Training
-
-```bash
-# Test data loading (verify CIFAR-10 subset loads correctly)
-python experiments/test_data_loading.py
-
-# Start part discovery training (will take several hours)
-python experiments/train_part_discovery.py
-```
-
-### Day 2: Continue Part Discovery (if needed) + Start Classification
-
-```bash
-# Train classification model
-python experiments/train_classifier.py
-```
-
-### Day 3: Extract Parts & Cluster
-
-```bash
-# Extract parts from trained model
-python experiments/extract_parts.py --visualize --num-samples 10
-
-# Cluster parts
-python experiments/cluster_parts.py
-
-# Launch Streamlit labeling interface
-streamlit run src/clustering/streamlit_labeler.py
-```
-
-### Day 4: Analysis & Linking
-
-```bash
-# Link parts to classes and generate interpretability report
-python experiments/link_parts_to_classes.py
-```
-
-## Project Status
-
-### ✅ Completed (Phase 1)
-- [x] Project structure
-- [x] Configuration files (data, model, training)
-- [x] CIFAR-10 subset data pipeline
-- [x] ResNet50 backbone
-- [x] Slot Attention model
-- [x] Classifier model
-- [x] Training pipelines (part discovery + classification)
-- [x] W&B integration
-- [x] Part discovery model trained (30 epochs)
-
-### ✅ Completed (Phase 2)
-- [x] Part extraction from trained Slot Attention model
-- [x] Clustering module with optimal K selection
-- [x] Quality metrics (Silhouette, Davies-Bouldin, Calinski-Harabasz)
-- [x] t-SNE visualization
-- [x] Streamlit labeling interface
-- [x] Cluster-class correlation analysis
-- [x] Linking mechanisms and interpretability reports
-
-### 🔄 Next Steps
-- [ ] Train classification model (if not done)
-- [ ] Run full pipeline on extracted parts
-- [ ] Complete semantic labeling of all clusters
-- [ ] Generate final interpretability analysis
-
-## Configuration
-
-Edit `configs/*.yaml` files to modify:
-- **data_config.yaml**: Dataset classes, augmentation, batch size
-- **model_config.yaml**: Model architectures, num_slots, dimensions
-- **training_config.yaml**: Training hyperparameters, W&B settings
-
-## Hardware Note
-
-Models are configured for **M4 Mac (MPS)**. Training times:
-- Part Discovery: ~2-3 hours (30 epochs)
-- Classification: ~1-2 hours (50 epochs)
-
-## Monitoring
-
-View training progress at: https://wandb.ai
-
-Tracks:
-- Reconstruction loss
-- Diversity loss  
-- Classification accuracy
-- Per-class metrics
+For full technical design, implementation internals, and dissertation alignment:
+→ **[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)**
 
 ---
 
-**Target**: Complete Phase 1-4 in 4 days (Nov 26-29, 2024)
+## Quick Start
+
+```bash
+cd /Users/dev/ml-projects/unsupervised-parts-discovery
+pip install -r requirements.txt
+```
+
+## Pipeline (run in order)
+
+```bash
+# 1. Extract DINO patch features (~15-20 min for 1000 images on M4 Mac)
+python experiments/run_pipeline.py --stage extract
+
+# 2. Cluster patches into semantic parts
+python experiments/run_pipeline.py --stage cluster
+
+# 3. [Optional] Fine-tune DINO encoder — improves cluster separation
+python experiments/run_pipeline.py --stage finetune
+python experiments/run_pipeline.py --stage extract   # re-extract
+python experiments/run_pipeline.py --stage cluster   # re-cluster
+
+# 4. Label clusters via Streamlit UI
+streamlit run labeling/label_tool.py
+
+# 5. Build concept vectors + compute activation scores
+python experiments/run_pipeline.py --stage concepts
+
+# 6. Train one-class classifier (cat vs not-cat)
+python experiments/run_pipeline.py --stage classify
+
+# 7. Explain a prediction
+python experiments/run_pipeline.py --stage explain --image data/masked/train/cat/001.png
+```
+
+## Project Structure
+
+```
+src/
+  models/        dino_extractor.py, dino_finetuner.py
+  pipeline/      patch_clusterer.py, concept_builder.py,
+                 concept_classifier.py, one_class_classifier.py
+  data/          data_classes.py, loaders.py, prepare_data.py
+  utils/         __init__.py (load_config, set_seed, get_device)
+experiments/
+  extract_features.py   — batch DINO extraction with foreground masking
+  find_optimal_k.py     — elbow + silhouette analysis for K selection
+  run_pipeline.py       — orchestrates all stages
+labeling/
+  label_tool.py         — Streamlit UI (Label Clusters + Classify & Explain tabs)
+scripts/
+  validate_clusters.py  — cluster quality metrics
+configs/
+  config.yaml           — all hyperparameters
+cache/                  — generated artefacts (gitignored)
+```
+
+## Key Hyperparameters (configs/config.yaml)
+
+| Parameter | Value | Purpose |
+|---|---|---|
+| `dino.fg_threshold` | 0.6 | Keep top 40% attended patches (foreground masking) |
+| `clustering.n_clusters` | 10 | Number of semantic part clusters |
+| `clustering.method` | gmm | Gaussian Mixture Model (handles unequal part sizes) |
+| `clustering.spatial_weight` | 0.4 | Weight of patch position in clustering |
+| `clustering.use_pca` | true | 384 → 64 dims before clustering |
+| `finetune.n_epochs` | 3 | Epochs for semantic consistency fine-tuning |
+| `finetune.lr` | 1e-5 | Learning rate (only last 2 DINO blocks) |
+
+## Hardware
+
+Configured for **M4 Mac (MPS)**. Change `device: mps` → `cuda` for NVIDIA GPU.
+- Feature extraction: ~15-20 min / 1000 images
+- Clustering: ~2-5 min
+- Fine-tuning: ~30 min (3 epochs)
+- Explain single image: ~5 sec
