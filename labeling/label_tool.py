@@ -30,11 +30,12 @@ def load_data(config_path='configs/config.yaml'):
     labels_arr = torch.load(cluster_labels_path, weights_only=True).numpy()
     n_clusters = cfg['clustering']['n_clusters']
     
-    # Load cluster centers
+    # Load cluster centers (works for both KMeans and GaussianMixture)
     clusterer_path = cfg['dino'].get('clusterer_path', 'cache/kmeans.pkl')
     with open(clusterer_path, 'rb') as f:
         kmeans = pickle.load(f)
-    cluster_centers = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
+    centers_np = getattr(kmeans, 'cluster_centers_', None) or kmeans.means_
+    cluster_centers = torch.tensor(centers_np, dtype=torch.float32)
     
     return data, labels_arr, n_clusters, cfg, cluster_centers
 
