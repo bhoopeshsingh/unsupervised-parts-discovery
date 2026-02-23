@@ -7,7 +7,10 @@ Two-tab Streamlit tool:
 Run with: streamlit run labeling/label_tool.py
 """
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Always run from project root so relative paths (cache/, configs/) resolve correctly
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_PROJECT_ROOT)
+sys.path.insert(0, _PROJECT_ROOT)
 
 import io, tempfile
 import torch, numpy as np, json, yaml, pickle
