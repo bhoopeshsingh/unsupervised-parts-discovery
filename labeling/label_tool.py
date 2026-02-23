@@ -257,6 +257,7 @@ def load_classifier_and_vectors(classifier_path: str, vectors_path: str):
 def run_classify_tab(cfg):
     """Classify & Explain tab: upload image → prediction + semantic part map."""
     from src.pipeline.concept_classifier import (
+        compute_image_concept_scores,
         get_spatial_concept_map,
         render_dissertation_explanation,
     )
@@ -328,12 +329,24 @@ def run_classify_tab(cfg):
         fg_feats = all_feats[fg_mask]
         concept_names = list(vectors.keys())
 
-        # Per-concept activation scores (max cosine similarity across fg patches)
-        img_norm = F.normalize(fg_feats, dim=-1)
-        concept_scores_dict = {}
-        for c_name, vec in vectors.items():
-            v_norm = F.normalize(vec.unsqueeze(0), dim=1).squeeze(0)
-            concept_scores_dict[c_name] = (img_norm @ v_norm).max().item()
+        # Load clusterer + label mapping for cluster-proportion scoring
+        clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
+        with open(clusterer_path, "rb") as _f:
+            _model = pickle.load(_f)
+        from src.pipeline.patch_clusterer import PatchClusterer
+        _clusterer = PatchClusterer.load(clusterer_path)
+        _human_labels = json.load(open(cfg["concepts"]["labels_path"]))
+        concept_to_cluster = {
+            meta["label"]: int(cid)
+            for cid, meta in _human_labels.items()
+            if meta.get("label", "").strip() and meta.get("include", True)
+        }
+        fg_patch_ids = torch.where(fg_mask)[0]
+        concept_scores_dict = compute_image_concept_scores(
+            fg_feats, vectors,
+            clusterer=_clusterer, concept_to_cluster=concept_to_cluster,
+            patch_ids=fg_patch_ids,
+        )
 
         score_vec = np.array([[concept_scores_dict[c] for c in concept_names]])
         preds, _, confs = clf.predict(score_vec)

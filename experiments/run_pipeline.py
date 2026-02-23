@@ -104,7 +104,7 @@ def stage_classify(cfg):
     concept_names = scores_data["concept_names"]
 
     print(f"Training on {len(scores)} cat images × {len(concept_names)} concepts")
-    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.1)
+    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.05)
     clf.fit(scores)
 
     preds, dec_scores, confs = clf.predict(scores)
@@ -204,13 +204,16 @@ def stage_explain(cfg, image_path: str):
     print("\n" + "=" * 60)
     print(f"STAGE 7: Explain prediction for {image_path}")
     print("=" * 60)
+    import json, pickle
     from src.models.dino_extractor import DinoExtractor
     from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
     from src.pipeline.concept_classifier import (
+        compute_image_concept_scores,
         get_spatial_concept_map,
         render_dissertation_explanation,
         render_explanation,
     )
+    from src.pipeline.patch_clusterer import PatchClusterer
 
     extractor = DinoExtractor(
         model_name=cfg["dino"]["model"],
@@ -237,12 +240,23 @@ def stage_explain(cfg, image_path: str):
         image_path, fg_threshold=fg_threshold
     )
     fg_feats = all_feats[fg_mask]
+    fg_patch_ids = torch.where(fg_mask)[0]   # actual patch indices (0-783)
 
-    img_norm = F.normalize(fg_feats, dim=-1)
-    concept_scores = {}
-    for c_name, vec in vectors.items():
-        v_norm = F.normalize(vec.unsqueeze(0), dim=1).squeeze(0)
-        concept_scores[c_name] = (img_norm @ v_norm).max().item()
+    # Load clusterer + label mapping for cluster-proportion scoring
+    clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
+    clusterer = PatchClusterer.load(clusterer_path)
+    human_labels = json.load(open(cfg["concepts"]["labels_path"]))
+    concept_to_cluster = {
+        meta["label"]: int(cid)
+        for cid, meta in human_labels.items()
+        if meta.get("label", "").strip() and meta.get("include", True)
+    }
+
+    concept_scores = compute_image_concept_scores(
+        fg_feats, vectors,
+        clusterer=clusterer, concept_to_cluster=concept_to_cluster,
+        patch_ids=fg_patch_ids,
+    )
 
     score_vec = np.array([[concept_scores[c] for c in concept_names]])
     preds, _, confs = clf.predict(score_vec)

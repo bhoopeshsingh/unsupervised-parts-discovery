@@ -87,6 +87,7 @@ concepts:
   labels_path: cache/labels.json
   vectors_cache: cache/concept_vectors.pt
   scores_cache: cache/concept_scores.pt
+  topk_patches: 10                  # top-K mean scoring — more discriminating than max
 
 # ==============================================================================
 # CLASSIFICATION  (linear probe on concept activation scores)

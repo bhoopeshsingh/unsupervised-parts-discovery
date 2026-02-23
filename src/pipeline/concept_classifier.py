@@ -163,6 +163,42 @@ class ConceptClassifier:
         return obj
 
 
+def compute_image_concept_scores(
+    image_features: torch.Tensor,
+    concept_vectors: dict,
+    clusterer=None,
+    concept_to_cluster: dict = None,
+    patch_ids: torch.Tensor = None,
+) -> dict:
+    """
+    Compute per-concept activation score for a single image.
+
+    If clusterer is provided: uses CLUSTER ASSIGNMENT PROPORTION —
+      fraction of patches assigned to each concept's cluster.
+      This matches the training-time scoring and is discriminating:
+      cats have meaningful proportions in specific clusters; non-cats don't.
+
+    Fallback (no clusterer): top-10 mean cosine similarity to concept vector.
+    """
+    if clusterer is not None and concept_to_cluster is not None:
+        patch_labels = clusterer.predict(image_features, patch_ids=patch_ids)
+        n_patches = len(patch_labels)
+        scores = {}
+        for c_name, cluster_id in concept_to_cluster.items():
+            scores[c_name] = float((patch_labels == cluster_id).sum()) / n_patches
+        return scores
+
+    # Fallback: top-10 mean cosine similarity
+    img_norm = F.normalize(image_features, dim=-1)
+    scores = {}
+    for c_name, vec in concept_vectors.items():
+        v_norm = F.normalize(vec.unsqueeze(0), dim=1).squeeze(0)
+        sims = img_norm @ v_norm
+        k = min(10, sims.shape[0])
+        scores[c_name] = sims.topk(k).values.mean().item()
+    return scores
+
+
 def get_spatial_concept_map(
     concept_names: list,
     concept_vectors: dict,
