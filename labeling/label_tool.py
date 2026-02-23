@@ -409,51 +409,52 @@ def run_classify_tab(cfg):
             {
                 "Concept": n.replace("_", " "),
                 "Activation": round(scores[n], 3),
-                "Deviation from cat": round(contribs[n], 4),
-                "Role": "→ cat" if contribs[n] >= 0 else "→ not cat",
+                "vs avg cat": round(contribs[n], 4),
+                "Signal": "↑ above avg" if contribs[n] >= 0 else "↓ below avg",
             }
             for n in concept_names
         ],
-        key=lambda r: abs(r["Deviation from cat"]),
+        key=lambda r: r["Activation"],
         reverse=True,
     )
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
     # ── plain-language explanation ─────────────────────────────
     st.subheader("Plain-language explanation")
-    # Top activated concepts regardless of deviation direction
-    top_activated = [
-        r["Concept"]
-        for r in sorted(rows, key=lambda r: r["Activation"], reverse=True)
-        if r["Activation"] > 0.5
-    ][:3]
-    top_absent = [
-        r["Concept"]
-        for r in rows
-        if r["Deviation from cat"] < -0.3
-    ][:2]
+    # Top activated concepts by raw activation score
+    top_activated = [r["Concept"] for r in rows if r["Activation"] > 0.5][:3]
+    top_weak = [r["Concept"] for r in rows if r["Activation"] < 0.3][:2]
 
     if is_cat:
-        evidence = ", ".join(f"**{c}**" for c in top_activated) if top_activated else "cat-like semantic patterns"
+        parts = ", ".join(f"**{c}**" for c in top_activated) if top_activated else "cat-like patterns"
         st.success(
-            f"This image is classified as a **CAT** ({conf:.0%} confidence). "
-            f"The strongest activated parts were {evidence} — semantic concepts labelled by a human annotator."
+            f"**CAT** ({conf:.0%} confidence)\n\n"
+            f"The concept activation profile — {parts} — falls **inside** the "
+            f"learned cat distribution. The one-class classifier judges the overall "
+            f"combination of all concept activations, not each concept individually."
         )
     else:
-        absent = ", ".join(f"**{c}**" for c in top_absent) if top_absent else "key cat parts"
+        weak = ", ".join(f"**{c}**" for c in top_weak) if top_weak else "most cat concepts"
         st.warning(
-            f"This image is classified as **NOT A CAT** ({conf:.0%} confidence). "
-            f"The expected cat-part signals ({absent}) were absent or weaker than a typical cat."
+            f"**NOT A CAT** ({conf:.0%} confidence)\n\n"
+            f"The overall concept activation profile falls **outside** the learned "
+            f"cat distribution. Weak activations in {weak} pushed the profile away "
+            f"from the cat boundary."
         )
 
-    with st.expander("How to read the Semantic Part Map"):
+    with st.expander("How to read these results"):
         st.markdown(
-            "The **Semantic Part Map** (centre panel) shows each 8×8 image patch "
-            "coloured by its closest concept. Bright foreground patches reveal exactly "
-            "which body-part prototype matched each region of the image.\n\n"
-            "**Deviation from cat**: positive = above typical cat activation, "
-            "negative = below. The one-class classifier flags an image as cat when "
-            "its overall concept profile falls within the cat training distribution."
+            "**Activation** — how strongly each semantic part (labelled by a human) "
+            "was detected in this image. Higher = stronger match to that concept.\n\n"
+            "**vs avg cat** — how this image's activation compares to the average cat "
+            "in training. ↑ above avg = stronger than typical cat; ↓ below avg = weaker.\n\n"
+            "**Important:** individual concept signals do not vote independently. "
+            "The one-class SVM evaluates the *combined* 10-concept profile and asks: "
+            "*does this pattern fall within the distribution of cat images?* "
+            "A concept can be below average and the image still be classified as cat "
+            "if the overall profile remains within the learned boundary.\n\n"
+            "**Semantic Part Map** — each 8×8 patch coloured by its closest concept. "
+            "Shows *where* in the image each part was detected."
         )
 
 
