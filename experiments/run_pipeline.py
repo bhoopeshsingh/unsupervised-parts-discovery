@@ -5,7 +5,10 @@ Runs all stages in sequence, logs to W&B.
 
 Usage:
   python experiments/run_pipeline.py --stage all
+  python experiments/run_pipeline.py --stage finetune   # fine-tune DINO (run before extract)
+  python experiments/run_pipeline.py --stage extract
   python experiments/run_pipeline.py --stage cluster
+  python experiments/run_pipeline.py --stage concepts
   python experiments/run_pipeline.py --stage classify
   python experiments/run_pipeline.py --stage explain --image path/to/image.jpg
 """
@@ -27,7 +30,13 @@ def stage_extract(cfg):
     print("STAGE 1+2: Feature Extraction + Caching")
     print("=" * 60)
     from experiments.extract_features import extract_all
-    return extract_all()
+
+    # If fine-tuned weights exist, load them before extracting
+    ft_path = cfg.get("finetune", {}).get("save_path", "cache/dino_finetuned.pt")
+    if Path(ft_path).exists():
+        print(f"Fine-tuned weights found at {ft_path} — will be loaded during extraction.")
+
+    return extract_all(finetune_weights=ft_path if Path(ft_path).exists() else None)
 
 
 def stage_cluster(cfg):
@@ -41,8 +50,9 @@ def stage_cluster(cfg):
     use_spatial = ccfg.get("use_spatial_features", False)
     use_pca = ccfg.get("use_pca", False)
     pca_dims = ccfg.get("pca_dims", 64)
+    method = ccfg.get("method", "kmeans")
 
-    print(f"  n_clusters={ccfg['n_clusters']}, use_pca={use_pca}"
+    print(f"  n_clusters={ccfg['n_clusters']}, method={method}, use_pca={use_pca}"
           + (f" (→{pca_dims}d)" if use_pca else "")
           + f", use_spatial={use_spatial}")
 
@@ -53,6 +63,8 @@ def stage_cluster(cfg):
         spatial_weight=ccfg.get("spatial_weight", 0.15),
         use_pca=use_pca,
         pca_dims=pca_dims,
+        method=method,
+        gmm_max_fit_samples=ccfg.get("gmm_max_fit_samples", 150_000),
     )
     labels = clusterer.fit(
         data["features"],
@@ -95,7 +107,6 @@ def stage_classify(cfg):
     clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.1)
     clf.fit(scores)
 
-    # Report: how many training images score as "cat"
     preds, dec_scores, confs = clf.predict(scores)
     cat_rate = sum(p == "cat" for p in preds) / len(preds)
     print(f"Cat recall (train): {cat_rate:.1%}  |  avg confidence: {confs.mean():.3f}")
@@ -106,6 +117,87 @@ def stage_classify(cfg):
     clf.save(classifier_path)
     print(f"Saved one-class classifier → {classifier_path}")
     return clf
+
+
+def stage_finetune(cfg):
+    """
+    Fine-tune last 2 DINO transformer blocks using cluster pseudo-labels.
+    Run BEFORE --stage extract so the improved weights are used for feature extraction.
+
+    Sequence:
+      1. python experiments/run_pipeline.py --stage extract    # initial features
+      2. python experiments/run_pipeline.py --stage cluster    # initial clusters
+      3. python experiments/run_pipeline.py --stage finetune   # improve DINO
+      4. python experiments/run_pipeline.py --stage extract    # re-extract with fine-tuned DINO
+      5. python experiments/run_pipeline.py --stage cluster    # re-cluster improved features
+    """
+    print("\n" + "=" * 60)
+    print("STAGE FT: DINO Semantic Fine-tuning")
+    print("=" * 60)
+    from src.models.dino_extractor import DinoExtractor
+    from src.models.dino_finetuner import DinoSemanticFinetuner, ImagePathDataset
+    from src.pipeline.patch_clusterer import PatchClusterer
+    from torch.utils.data import DataLoader
+
+    ftcfg = cfg.get("finetune", {})
+    n_epochs        = ftcfg.get("n_epochs", 3)
+    lr              = ftcfg.get("lr", 1e-5)
+    n_pairs         = ftcfg.get("n_pairs", 512)
+    batch_size      = ftcfg.get("batch_size", 16)
+    save_path       = ftcfg.get("save_path", "cache/dino_finetuned.pt")
+
+    # Check pre-requisites
+    features_cache = cfg["dino"]["features_cache"]
+    clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
+    if not Path(features_cache).exists() or not Path(clusterer_path).exists():
+        print("ERROR: Run --stage extract and --stage cluster first.")
+        sys.exit(1)
+
+    # Load extractor (frozen DINO)
+    extractor = DinoExtractor(
+        model_name=cfg["dino"]["model"],
+        device=cfg["dino"]["device"],
+        image_size=cfg["dino"]["image_size"],
+    )
+
+    # Re-enable gradients for fine-tuning (DinoExtractor freezes them by default)
+    for p in extractor.model.parameters():
+        p.requires_grad = False   # reset; finetuner will selectively unfreeze
+
+    # Load fitted clusterer (for pseudo-labels)
+    clusterer = PatchClusterer.load(clusterer_path)
+    print(f"Clusterer loaded: {clusterer.n_clusters} clusters, method={clusterer.method}")
+
+    # Image dataloader — cat images only
+    data = torch.load(features_cache, weights_only=False)
+    image_paths = data["image_paths"]
+    dataset = ImagePathDataset(image_paths, image_size=cfg["dino"]["image_size"])
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,
+        drop_last=True,
+    )
+    print(f"Dataset: {len(dataset)} images  |  batch_size={batch_size}")
+
+    # Create finetuner
+    finetuner = DinoSemanticFinetuner(
+        extractor.model,
+        device=extractor.device,
+        lr=lr,
+    )
+
+    print(f"\nFine-tuning for {n_epochs} epoch(s)  (lr={lr}, n_pairs={n_pairs})")
+    for epoch in range(1, n_epochs + 1):
+        loss = finetuner.train_epoch(dataloader, clusterer, n_pairs=n_pairs)
+        print(f"  Epoch {epoch}/{n_epochs}  loss={loss:.4f}")
+
+    finetuner.save(save_path)
+    print(f"\nDone. Now re-run extract + cluster to use the improved features:")
+    print(f"  python experiments/run_pipeline.py --stage extract")
+    print(f"  python experiments/run_pipeline.py --stage cluster")
+    return save_path
 
 
 def stage_explain(cfg, image_path: str):
@@ -125,6 +217,13 @@ def stage_explain(cfg, image_path: str):
         device=cfg["dino"]["device"],
         image_size=cfg["dino"]["image_size"],
     )
+
+    # Load fine-tuned weights if available
+    ft_path = cfg.get("finetune", {}).get("save_path", "cache/dino_finetuned.pt")
+    if Path(ft_path).exists():
+        from src.models.dino_finetuner import DinoSemanticFinetuner
+        DinoSemanticFinetuner.load_weights_into_extractor(extractor, ft_path)
+
     classifier_path = cfg["classification"].get(
         "classifier_path", "cache/concept_classifier.pkl"
     )
@@ -134,13 +233,11 @@ def stage_explain(cfg, image_path: str):
     concept_names = list(vectors.keys())
     fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
 
-    # Extract all 784 patches + foreground mask
     all_feats, fg_mask = extractor.extract_all_patches_with_fg_mask(
         image_path, fg_threshold=fg_threshold
     )
     fg_feats = all_feats[fg_mask]
 
-    # Compute per-concept activation scores (max cosine sim across fg patches)
     img_norm = F.normalize(fg_feats, dim=-1)
     concept_scores = {}
     for c_name, vec in vectors.items():
@@ -155,7 +252,6 @@ def stage_explain(cfg, image_path: str):
         "prediction": preds[0],
         "confidence": float(confs[0]),
         "concept_scores": concept_scores,
-        # deviation_from_cat: positive = above typical cat = pushes toward cat
         "contributions": {
             item["concept"]: item["deviation_from_cat"] for item in explanation
         },
@@ -168,7 +264,6 @@ def stage_explain(cfg, image_path: str):
         bar = "█" * int(score * 20)
         print(f"  {c:20s} {score:.3f} {bar}")
 
-    # Spatial concept map — assigns every patch to nearest concept
     concept_map, _ = get_spatial_concept_map(concept_names, vectors, all_feats)
 
     explanation_dir = cfg["classification"].get("explanation_dir", "cache/")
@@ -191,33 +286,23 @@ def stage_explain(cfg, image_path: str):
 
 
 def log_to_wandb(cfg, acc, concept_names):
-    """Log results to W&B — reuses your existing W&B setup."""
     try:
         import wandb
         wandb.init(
-            project=cfg.get("wandb", {}).get(
-                "project", "dino-parts-discovery"
-            ),
+            project=cfg.get("wandb", {}).get("project", "dino-parts-discovery"),
             name="dino-concept-pipeline",
             config={
                 "model": cfg["dino"]["model"],
                 "n_clusters": cfg["clustering"]["n_clusters"],
                 "n_concepts": len(concept_names),
-                "clf_C": cfg["classification"]["C"],
+                "clustering_method": cfg["clustering"].get("method", "kmeans"),
             },
         )
-        wandb.log({
-            "test_accuracy": acc,
-            "n_concepts": len(concept_names),
-        })
+        wandb.log({"n_concepts": len(concept_names)})
         for img_path in Path("cache").glob("part_map_img*.png"):
-            wandb.log({
-                f"part_maps/{img_path.name}": wandb.Image(str(img_path)),
-            })
+            wandb.log({f"part_maps/{img_path.name}": wandb.Image(str(img_path))})
         for img_path in Path("cache").glob("explanation_*.png"):
-            wandb.log({
-                f"explanations/{img_path.name}": wandb.Image(str(img_path)),
-            })
+            wandb.log({f"explanations/{img_path.name}": wandb.Image(str(img_path))})
         wandb.finish()
         print("W&B logging complete.")
     except Exception as e:
@@ -229,20 +314,19 @@ def main():
     parser.add_argument(
         "--stage",
         default="all",
-        choices=["all", "extract", "cluster", "concepts", "classify", "explain"],
+        choices=["all", "extract", "cluster", "concepts", "classify",
+                 "explain", "finetune"],
     )
-    parser.add_argument(
-        "--image",
-        default=None,
-        help="Image path for explain stage",
-    )
-    parser.add_argument(
-        "--config",
-        default="configs/config.yaml",
-    )
+    parser.add_argument("--image", default=None, help="Image path for explain stage")
+    parser.add_argument("--config", default="configs/config.yaml")
     args = parser.parse_args()
+
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
+
+    if args.stage == "finetune":
+        stage_finetune(cfg)
+        return
 
     if args.stage in ("all", "extract"):
         stage_extract(cfg)
@@ -256,15 +340,10 @@ def main():
         stage_concepts(cfg)
     if args.stage in ("all", "classify"):
         if not Path(cfg["concepts"]["scores_cache"]).exists():
-            print(
-                "ERROR: concept scores not found. Run concepts stage first: "
-                "python experiments/run_pipeline.py --stage concepts"
-            )
+            print("ERROR: concept scores not found. Run concepts stage first.")
             sys.exit(1)
         clf = stage_classify(cfg)
-        scores_data = torch.load(
-            cfg["concepts"]["scores_cache"], weights_only=False
-        )
+        scores_data = torch.load(cfg["concepts"]["scores_cache"], weights_only=False)
         log_to_wandb(cfg, 0.0, scores_data["concept_names"])
     if args.stage == "explain":
         if not args.image:

@@ -61,22 +61,24 @@ dino:
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
-  fg_threshold: 0.5                 # keep top (1-fg_threshold) attended patches
-                                    # 0.5 = top 50% (balanced)
+  fg_threshold: 0.6                 # keep top (1-fg_threshold) attended patches
+                                    # 0.6 = top 40% — tighter foreground masking
 
 # ==============================================================================
 # CLUSTERING  (MiniBatchKMeans on DINO patch features)
 # ==============================================================================
 clustering:
-  n_clusters: 10                    # chosen via find_optimal_k.py
+  n_clusters: 10                    # confirmed optimal via find_optimal_k.py (cat-only)
   n_init: 20
   max_iter: 300
   batch_size: 8192
   random_seed: 42
-  use_pca: true                     # 384 → 64 dims (~90% variance retained)
+  method: gmm                       # "kmeans" | "gmm" — GMM handles unequal part sizes
+  gmm_max_fit_samples: 150000       # subsample for GMM fitting (scalability)
+  use_pca: true                     # 384 → 64 dims
   pca_dims: 64
   use_spatial_features: true        # weight patch position during clustering
-  spatial_weight: 0.3
+  spatial_weight: 0.4               # increased from 0.3 for more spatially coherent parts
 
 # ==============================================================================
 # CONCEPT LABELING  (human-in-the-loop via labeling/label_tool.py)
@@ -96,6 +98,19 @@ classification:
   random_seed: 42
   classifier_path: cache/concept_classifier.pkl
   explanation_dir: cache/
+
+# ==============================================================================
+# DINO FINE-TUNING  (optional — run before extract to improve feature quality)
+# ==============================================================================
+# Sequence:  --stage extract → --stage cluster → --stage finetune
+#            → --stage extract (again) → --stage cluster (again) → rest of pipeline
+# ==============================================================================
+finetune:
+  save_path: cache/dino_finetuned.pt
+  n_epochs: 3                       # 3 epochs is enough for semantic alignment
+  lr: 1e-5                          # small LR — only last 2 blocks unfreeze
+  batch_size: 16
+  n_pairs: 512                      # contrastive pairs per batch
 
 # ==============================================================================
 # EXPERIMENT TRACKING

@@ -1,6 +1,6 @@
 # src/pipeline/patch_clusterer.py
 """
-Patch clusterer using MiniBatchKMeans on DINO patch features.
+Patch clusterer using MiniBatchKMeans or GaussianMixture on DINO patch features.
 Produces part maps (28x28 cluster labels per image) and visualisation helpers.
 """
 import pickle
@@ -14,6 +14,7 @@ import yaml
 from PIL import Image
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import PCA
+from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 
 
@@ -26,6 +27,8 @@ class PatchClusterer:
         spatial_weight: float = 0.15,
         use_pca: bool = False,
         pca_dims: int = 64,
+        method: str = "kmeans",        # "kmeans" | "gmm"
+        gmm_max_fit_samples: int = 150_000,  # GMM subsamples for scalability
     ):
         self.n_clusters = n_clusters
         self.random_seed = random_seed
@@ -33,16 +36,30 @@ class PatchClusterer:
         self.spatial_weight = spatial_weight
         self.use_pca = use_pca
         self.pca_dims = pca_dims
-        self.pca = None  # fitted after calling fit()
-        self.kmeans = MiniBatchKMeans(
-            n_clusters=n_clusters,
-            n_init=10,
-            max_iter=300,
-            batch_size=4096,
-            random_state=random_seed,
-        )
+        self.method = method
+        self.gmm_max_fit_samples = gmm_max_fit_samples
+        self.pca = None
         self.labels_ = None
         self.centers_ = None
+
+        if method == "gmm":
+            self.gmm = GaussianMixture(
+                n_components=n_clusters,
+                covariance_type="diag",   # diagonal = faster, scales to high dims
+                n_init=3,
+                max_iter=200,
+                random_state=random_seed,
+            )
+            self.kmeans = None
+        else:
+            self.kmeans = MiniBatchKMeans(
+                n_clusters=n_clusters,
+                n_init=10,
+                max_iter=300,
+                batch_size=4096,
+                random_state=random_seed,
+            )
+            self.gmm = None
 
     def _augment_with_spatial(
         self, features: np.ndarray, patch_ids: np.ndarray
@@ -66,6 +83,21 @@ class PatchClusterer:
             X = self.pca.transform(X)
         return normalize(X, norm="l2")  # re-normalise after PCA
 
+    def _prepare_features(
+        self, features: torch.Tensor, patch_ids=None, fit_pca: bool = False
+    ) -> np.ndarray:
+        """Normalise, optionally PCA-reduce, optionally append spatial coords."""
+        X = normalize(features.numpy(), norm="l2")
+        if self.use_pca:
+            X = self._apply_pca(X, fit=fit_pca)
+        if self.use_spatial_features and patch_ids is not None:
+            pid = patch_ids.numpy() if isinstance(patch_ids, torch.Tensor) else patch_ids
+            X = self._augment_with_spatial(X, pid)
+            X = normalize(X, norm="l2")
+            if fit_pca:
+                print("  (using spatial features: row/col to separate e.g. eyes vs nose)")
+        return X
+
     def fit(
         self,
         features: torch.Tensor,
@@ -73,28 +105,40 @@ class PatchClusterer:
     ) -> np.ndarray:
         """
         Args:
-            features [N, D] — all patch features (D=384 without PCA, D=pca_dims with PCA)
-            patch_ids [N]   — optional; required if use_spatial_features is True
+            features [N, D] — all patch features
+            patch_ids [N]   — required if use_spatial_features is True
         Returns:
             cluster labels [N]
         """
-        print(f"Clustering {features.shape[0]:,} patches into {self.n_clusters} clusters...")
-        X = normalize(features.numpy(), norm="l2")
+        print(f"Clustering {features.shape[0]:,} patches into {self.n_clusters} clusters "
+              f"[method={self.method}]...")
+        X = self._prepare_features(features, patch_ids, fit_pca=True)
 
-        if self.use_pca:
-            X = self._apply_pca(X, fit=True)
+        if self.method == "gmm":
+            # GMM is O(n·k·d²) — subsample for fitting, then predict all
+            N = X.shape[0]
+            if N > self.gmm_max_fit_samples:
+                rng = np.random.default_rng(self.random_seed)
+                idx = rng.choice(N, self.gmm_max_fit_samples, replace=False)
+                print(f"  GMM: fitting on {self.gmm_max_fit_samples:,} / {N:,} samples...")
+                self.gmm.fit(X[idx])
+            else:
+                self.gmm.fit(X)
+            print(f"  GMM converged: {self.gmm.converged_}  "
+                  f"| lower bound: {self.gmm.lower_bound_:.4f}")
+            self.labels_ = self.gmm.predict(X)
+            # Cluster centres = GMM means
+            self.centers_ = torch.tensor(
+                self.gmm.means_[:, : self.pca_dims if self.use_pca else X.shape[1]],
+                dtype=torch.float32,
+            )
+        else:
+            self.kmeans.fit(X)
+            self.labels_ = self.kmeans.labels_
+            self.centers_ = torch.tensor(
+                self.kmeans.cluster_centers_, dtype=torch.float32
+            )
 
-        if self.use_spatial_features and patch_ids is not None:
-            pid = patch_ids.numpy() if isinstance(patch_ids, torch.Tensor) else patch_ids
-            X = self._augment_with_spatial(X, pid)
-            X = normalize(X, norm="l2")
-            print("  (using spatial features: row/col to separate e.g. eyes vs nose)")
-
-        self.kmeans.fit(X)
-        self.labels_ = self.kmeans.labels_
-        self.centers_ = torch.tensor(
-            self.kmeans.cluster_centers_, dtype=torch.float32
-        )
         print(f"Done. Cluster sizes: {np.bincount(self.labels_)}")
         return self.labels_
 
@@ -103,13 +147,9 @@ class PatchClusterer:
         features: torch.Tensor,
         patch_ids: torch.Tensor = None,
     ) -> np.ndarray:
-        X = normalize(features.numpy(), norm="l2")
-        if self.use_pca and self.pca is not None:
-            X = self._apply_pca(X, fit=False)
-        if self.use_spatial_features and patch_ids is not None:
-            pid = patch_ids.numpy() if isinstance(patch_ids, torch.Tensor) else patch_ids
-            X = self._augment_with_spatial(X, pid)
-            X = normalize(X, norm="l2")
+        X = self._prepare_features(features, patch_ids, fit_pca=False)
+        if self.method == "gmm":
+            return self.gmm.predict(X)
         return self.kmeans.predict(X)
 
     def get_part_map(
@@ -121,10 +161,14 @@ class PatchClusterer:
         return patch_labels.reshape(28, 28)
 
     def save(self, path: str):
+        model_obj = self.gmm if self.method == "gmm" else self.kmeans
         with open(path, "wb") as f:
-            pickle.dump(self.kmeans, f)
-        centers_path = path.replace(".pkl", "_centers.pt")
-        torch.save(self.centers_, centers_path)
+            pickle.dump(model_obj, f)
+
+        if self.centers_ is not None:
+            centers_path = path.replace(".pkl", "_centers.pt")
+            torch.save(self.centers_, centers_path)
+
         meta_path = path.replace(".pkl", "_meta.pt")
         torch.save(
             {
@@ -134,6 +178,8 @@ class PatchClusterer:
                 "pca_dims": self.pca_dims,
                 "n_clusters": self.n_clusters,
                 "random_seed": self.random_seed,
+                "method": self.method,
+                "gmm_max_fit_samples": self.gmm_max_fit_samples,
             },
             meta_path,
         )
@@ -147,36 +193,40 @@ class PatchClusterer:
     @classmethod
     def load(cls, path: str, n_clusters: int = 8):
         meta_path = path.replace(".pkl", "_meta.pt")
-        use_spatial = False
-        spatial_weight = 0.15
-        use_pca = False
-        pca_dims = 64
-        random_seed = 42
+        meta = {}
         if Path(meta_path).exists():
             meta = torch.load(meta_path, weights_only=True)
-            use_spatial = meta.get("use_spatial_features", False)
-            spatial_weight = meta.get("spatial_weight", 0.15)
-            use_pca = meta.get("use_pca", False)
-            pca_dims = meta.get("pca_dims", 64)
-            n_clusters = meta.get("n_clusters", n_clusters)
-            random_seed = meta.get("random_seed", 42)
+
         obj = cls(
-            n_clusters=n_clusters,
-            random_seed=random_seed,
-            use_spatial_features=use_spatial,
-            spatial_weight=spatial_weight,
-            use_pca=use_pca,
-            pca_dims=pca_dims,
+            n_clusters=meta.get("n_clusters", n_clusters),
+            random_seed=meta.get("random_seed", 42),
+            use_spatial_features=meta.get("use_spatial_features", False),
+            spatial_weight=meta.get("spatial_weight", 0.15),
+            use_pca=meta.get("use_pca", False),
+            pca_dims=meta.get("pca_dims", 64),
+            method=meta.get("method", "kmeans"),
+            gmm_max_fit_samples=meta.get("gmm_max_fit_samples", 150_000),
         )
+
         with open(path, "rb") as f:
-            obj.kmeans = pickle.load(f)
-        obj.centers_ = torch.tensor(
-            obj.kmeans.cluster_centers_, dtype=torch.float32
-        )
+            model_obj = pickle.load(f)
+
+        if obj.method == "gmm":
+            obj.gmm = model_obj
+        else:
+            obj.kmeans = model_obj
+
         centers_path = path.replace(".pkl", "_centers.pt")
         if Path(centers_path).exists():
             obj.centers_ = torch.load(centers_path, weights_only=True)
-        if use_pca:
+        elif obj.method == "gmm":
+            obj.centers_ = torch.tensor(obj.gmm.means_, dtype=torch.float32)
+        else:
+            obj.centers_ = torch.tensor(
+                obj.kmeans.cluster_centers_, dtype=torch.float32
+            )
+
+        if obj.use_pca:
             pca_path = path.replace(".pkl", "_pca.pkl")
             if Path(pca_path).exists():
                 with open(pca_path, "rb") as f:

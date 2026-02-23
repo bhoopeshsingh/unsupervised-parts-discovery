@@ -45,7 +45,8 @@ def collect_images(data_dir: str, classes_filter=None):
     return paths, labels, class_names
 
 
-def extract_all(config_path: str = "configs/config.yaml"):
+def extract_all(config_path: str = "configs/config.yaml",
+                finetune_weights: str = None):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
     dcfg = cfg["dino"]
@@ -56,6 +57,12 @@ def extract_all(config_path: str = "configs/config.yaml"):
         device=dcfg["device"],
         image_size=dcfg["image_size"],
     )
+
+    # Load fine-tuned weights if provided
+    if finetune_weights and Path(finetune_weights).exists():
+        from src.models.dino_finetuner import DinoSemanticFinetuner
+        DinoSemanticFinetuner.load_weights_into_extractor(extractor, finetune_weights)
+        print(f"Using fine-tuned DINO weights from {finetune_weights}")
 
     # Input images: dino.data_root overrides dataset.root; dino.classes restricts to those classes
     data_dir = dcfg.get("data_root") or cfg.get("dataset", {}).get("root", "data")
