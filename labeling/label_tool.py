@@ -421,37 +421,40 @@ def run_classify_tab(cfg):
 
     # ── plain-language explanation ─────────────────────────────
     st.subheader("Plain-language explanation")
-    top_cat = [
+    # Top activated concepts regardless of deviation direction
+    top_activated = [
         r["Concept"]
-        for r in rows
-        if r["Deviation from cat"] > 0 and r["Activation"] > 0.6
+        for r in sorted(rows, key=lambda r: r["Activation"], reverse=True)
+        if r["Activation"] > 0.5
     ][:3]
     top_absent = [
         r["Concept"]
         for r in rows
-        if r["Deviation from cat"] < 0 and r["Activation"] > 0.6
+        if r["Deviation from cat"] < -0.3
     ][:2]
 
     if is_cat:
-        evidence = ", ".join(f"**{c}**" for c in top_cat) if top_cat else "several cat-like textures"
+        evidence = ", ".join(f"**{c}**" for c in top_activated) if top_activated else "cat-like semantic patterns"
         st.success(
-            f"This image is classified as a **CAT** ({conf:.0%} confidence) because the "
-            f"system detected {evidence} — semantic parts labelled by a human annotator."
+            f"This image is classified as a **CAT** ({conf:.0%} confidence). "
+            f"The strongest activated parts were {evidence} — semantic concepts labelled by a human annotator."
         )
     else:
-        absent = ", ".join(f"**{c}**" for c in top_absent) if top_absent else "cat part activations"
+        absent = ", ".join(f"**{c}**" for c in top_absent) if top_absent else "key cat parts"
         st.warning(
             f"This image is classified as **NOT A CAT** ({conf:.0%} confidence). "
             f"The expected cat-part signals ({absent}) were absent or weaker than a typical cat."
         )
 
-    if top_positive:
-        with st.expander("Which regions activated?"):
-            st.markdown(
-                "The **Semantic Part Map** (centre panel above) shows each 8×8 image patch "
-                "coloured by its closest concept. Bright foreground patches reveal exactly "
-                "which body-part prototype matched each region of the image."
-            )
+    with st.expander("How to read the Semantic Part Map"):
+        st.markdown(
+            "The **Semantic Part Map** (centre panel) shows each 8×8 image patch "
+            "coloured by its closest concept. Bright foreground patches reveal exactly "
+            "which body-part prototype matched each region of the image.\n\n"
+            "**Deviation from cat**: positive = above typical cat activation, "
+            "negative = below. The one-class classifier flags an image as cat when "
+            "its overall concept profile falls within the cat training distribution."
+        )
 
 
 # ── Streamlit UI ──────────────────────────────────────────────
