@@ -256,9 +256,11 @@ def get_cluster_patches_fast(cluster_id, data, labels_arr, quality_cache,
 # ── Classification helpers ─────────────────────────────────────
 
 @st.cache_resource(show_spinner="Loading DINO model…")
-def load_dino_extractor(model_name: str, device: str, image_size: int):
+def load_dino_extractor(model_name: str, device: str, image_size: int,
+                        use_multilayer: bool = False):
     from src.models.dino_extractor import DinoExtractor
-    return DinoExtractor(model_name=model_name, device=device, image_size=image_size)
+    return DinoExtractor(model_name=model_name, device=device, image_size=image_size,
+                         use_multilayer=use_multilayer)
 
 
 @st.cache_resource(show_spinner="Loading classifier…")
@@ -302,6 +304,7 @@ def run_classify_tab(cfg):
         cfg["dino"]["model"],
         cfg["dino"]["device"],
         cfg["dino"]["image_size"],
+        cfg["dino"].get("use_multilayer", False),
     )
     clf, vectors = load_classifier_and_vectors(clf_path, vec_path)
 
