@@ -35,7 +35,8 @@ def stage_extract(cfg):
     ft_path = cfg.get("finetune", {}).get("save_path", "cache/dino_finetuned.pt")
     if Path(ft_path).exists():
         print(f"Fine-tuned weights found at {ft_path} — will be loaded during extraction.")
-
+    use_ml = cfg["dino"].get("use_multilayer", False)
+    print(f"Feature mode: {'multi-layer (8,10,12) → 1152-dim' if use_ml else 'single-layer → 384-dim'}")
     return extract_all(finetune_weights=ft_path if Path(ft_path).exists() else None)
 
 
@@ -70,6 +71,18 @@ def stage_cluster(cfg):
         data["features"],
         patch_ids=data["patch_ids"] if use_spatial else None,
     )
+
+    # Optional: spatial coherence smoothing — clean up isolated stray patches
+    use_smoothing = ccfg.get("use_spatial_smoothing", False)
+    if use_smoothing:
+        print("  Applying spatial coherence smoothing...")
+        labels = clusterer.smooth_labels(
+            labels,
+            image_ids=data["image_ids"].numpy(),
+            patch_ids=data["patch_ids"].numpy(),
+            n_iter=1,
+        )
+
     cluster_labels_path = cfg["dino"].get("cluster_labels_path", "cache/cluster_labels.pt")
     clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
     torch.save(torch.tensor(labels), cluster_labels_path)
@@ -219,6 +232,7 @@ def stage_explain(cfg, image_path: str):
         model_name=cfg["dino"]["model"],
         device=cfg["dino"]["device"],
         image_size=cfg["dino"]["image_size"],
+        use_multilayer=cfg["dino"].get("use_multilayer", False),
     )
 
     # Load fine-tuned weights if available

@@ -136,105 +136,120 @@ def get_cluster_patches_fast(cluster_id, data, labels_arr, quality_cache,
                               context_size=72,
                               part_box_size=24):
     """
-    Fast patch selection WITH CONTEXT WINDOWS.
-    Shows patches with surrounding image region and red box highlighting the part region.
-    
+    Patch selection WITH CONTEXT WINDOWS, sorted by representativeness.
+
+    Patches are sorted by cosine similarity to the cluster mean feature vector:
+      - First n_core patches  = most representative (closest to cluster centre)
+      - Last  n_boundary      = boundary cases  (farthest from cluster centre)
+
+    This gives the labeler a much clearer signal about what the cluster represents
+    and where its edges are, compared to random or quality-only sampling.
+
     Args:
         context_size: Size of context window (default 72 = more face context)
-        part_box_size: Size of red highlighted "part" box in pixels (default 24 = 3×3 patches,
-                       so the part is visually closer to eye/nose scale instead of tiny 8×8)
+        part_box_size: Size of red highlighted "part" box in pixels
     """
     cluster_mask = (labels_arr == cluster_id)
     cluster_indices = np.where(cluster_mask)[0]
-    
+
     if len(cluster_indices) == 0:
         return []
-    
+
     brightness = quality_cache['brightness'][cluster_indices].numpy()
     variance   = quality_cache['variance'][cluster_indices].numpy()
     spatial    = quality_cache['spatial_centrality'][cluster_indices].numpy()
-    
-    # Filter by quality
-    quality_mask = (brightness >= brightness_threshold) & (variance >= variance_threshold)
-    good_indices = cluster_indices[quality_mask]
-    
-    if len(good_indices) == 0:
+
+    # ── Representativeness: cosine similarity to cluster mean ──────────────
+    # Uses raw DINO features (works for both 384-dim and 1152-dim multilayer)
+    cluster_feats = data['features'][cluster_indices]          # [M, D]
+    cluster_mean  = F.normalize(cluster_feats.mean(0, keepdim=True), dim=1)  # [1, D]
+    cluster_feats_norm = F.normalize(cluster_feats, dim=1)     # [M, D]
+    cosine_sims   = (cluster_feats_norm @ cluster_mean.T).squeeze(1).numpy()  # [M]
+    # cosine_sims[i] = 1.0 → perfect match to cluster centre (most representative)
+    # cosine_sims[i] = low → boundary/outlier patch
+
+    # ── Filter by basic quality (remove pure black/blank patches) ──────────
+    quality_ok = (brightness >= brightness_threshold) & (variance >= variance_threshold)
+    good_local = np.where(quality_ok)[0]
+
+    if len(good_local) == 0:
         return []
-    
-    # Get scores for filtered patches
-    brightness_subset = brightness[quality_mask]
-    variance_subset   = variance[quality_mask]
-    spatial_subset    = spatial[quality_mask]
-    
-    # Combined quality score
-    quality_scores = (brightness_subset * 0.2 + 
-                     (variance_subset / 50.0) * 0.3 + 
-                     spatial_subset * 0.5)
-    
-    # Sort by quality, take top N
-    top_n_local = np.argsort(quality_scores)[::-1][:n_samples]
-    top_n_global = good_indices[top_n_local]
+
+    good_global  = cluster_indices[good_local]
+    good_sims    = cosine_sims[good_local]
+
+    # ── Select: n_core most representative + n_boundary boundary cases ─────
+    sorted_by_sim = np.argsort(good_sims)[::-1]   # descending: best first
+    n_core     = max(6, n_samples - 3)
+    n_boundary = n_samples - n_core
+    core_local     = sorted_by_sim[:n_core]
+    boundary_local = sorted_by_sim[-n_boundary:] if len(sorted_by_sim) > n_core else []
+
+    selected_local  = np.concatenate([core_local, boundary_local]).astype(int)
+    selected_global = good_global[selected_local]
+    selected_sims   = good_sims[selected_local]
+    is_boundary     = np.array([False] * len(core_local) + [True] * len(boundary_local))
     
     # Load patches WITH CONTEXT
     patches = []
-    for idx in top_n_global:
+    for enum_i, (idx, sim, is_bdry) in enumerate(
+        zip(selected_global, selected_sims, is_boundary)
+    ):
         img_idx   = int(data['image_ids'][idx].item())
         patch_idx = int(data['patch_ids'][idx].item())
         row_p = patch_idx // 28
         col_p = patch_idx % 28
-        
+
         try:
             img = Image.open(data['image_paths'][img_idx]).convert('RGB').resize((224, 224))
             img_arr = np.array(img)
-            
+
             # Patch center in pixel coordinates
             patch_center_r = row_p * 8 + 4
             patch_center_c = col_p * 8 + 4
-            
+
             # Context window around patch
             half_ctx = context_size // 2
             r_start = max(0, patch_center_r - half_ctx)
             r_end   = min(224, patch_center_r + half_ctx)
             c_start = max(0, patch_center_c - half_ctx)
             c_end   = min(224, patch_center_c + half_ctx)
-            
-            # Crop context region
+
             context_crop = img_arr[r_start:r_end, c_start:c_end].copy()
-            
-            # Red box: center on the 8×8 patch, use part_box_size so part is visible (e.g. 24 = 3× patch)
+
+            # Red box for core, orange box for boundary cases
             patch_r_in_ctx = row_p * 8 - r_start
             patch_c_in_ctx = col_p * 8 - c_start
-            patch_center_r = patch_r_in_ctx + 4
-            patch_center_c = patch_c_in_ctx + 4
-            half_box = part_box_size // 2
-            box_r0 = max(0, patch_center_r - half_box)
-            box_c0 = max(0, patch_center_c - half_box)
+            pr_center = patch_r_in_ctx + 4
+            pc_center = patch_c_in_ctx + 4
+            half_box  = part_box_size // 2
+            box_r0 = max(0, pr_center - half_box)
+            box_c0 = max(0, pc_center - half_box)
             box_r1 = min(context_crop.shape[0], box_r0 + part_box_size)
             box_c1 = min(context_crop.shape[1], box_c0 + part_box_size)
-            thickness = max(2, part_box_size // 12)
-            
+            thickness  = max(2, part_box_size // 12)
+            box_colour = (255, 140, 0) if is_bdry else (255, 0, 0)  # orange=boundary, red=core
+
             context_with_box = context_crop.copy()
-            cv2.rectangle(
-                context_with_box,
-                (box_c0, box_r0),
-                (box_c1, box_r1),
-                (255, 0, 0),
-                thickness
-            )
-            
-            # Convert to PIL
+            cv2.rectangle(context_with_box, (box_c0, box_r0), (box_c1, box_r1),
+                          box_colour, thickness)
+
             context_pil = Image.fromarray(context_with_box)
-            
+
             local_idx = np.where(cluster_indices == idx)[0][0]
-            brightness_val = float(brightness[local_idx])
-            variance_val   = float(variance[local_idx])
-            spatial_val    = float(spatial[local_idx])
-            
-            patches.append((context_pil, str(data['image_paths'][img_idx]), 
-                          int(patch_idx), brightness_val, variance_val, spatial_val))
+            patches.append((
+                context_pil,
+                str(data['image_paths'][img_idx]),
+                int(patch_idx),
+                float(brightness[local_idx]),
+                float(variance[local_idx]),
+                float(spatial[local_idx]),
+                float(sim),        # representativeness score
+                bool(is_bdry),     # True = boundary case
+            ))
         except Exception:
             continue
-    
+
     return patches
 
 
@@ -584,12 +599,30 @@ def run_streamlit():
             st.warning('⚠️ No quality patches found. This cluster is likely pure background.')
             st.info('💡 Label as "background" and uncheck "Include in classification"')
         else:
-            st.success(f'✅ Showing {len(patches)} highest-quality patches')
+            core_patches     = [p for p in patches if not p[7]]
+            boundary_patches = [p for p in patches if p[7]]
+
+            st.success(
+                f'✅ {len(core_patches)} core patches (🔴 red box = most representative) '
+                f'+ {len(boundary_patches)} boundary patches (🟠 orange box = cluster edge)'
+            )
+            st.caption('Core patches = closest to cluster centre. '
+                       'Boundary patches = farthest from centre (helps spot where the cluster bleeds into other concepts).')
+
+            st.markdown('**Core patches** — what this cluster mostly looks like')
             cols = st.columns(3)
-            for i, (patch, path, pidx, brightness, variance, spatial) in enumerate(patches):
+            for i, (patch, path, pidx, brightness, variance, spatial, sim, _) in enumerate(core_patches):
                 cols[i % 3].image(patch,
-                                  caption=f'patch {pidx} (center={spatial:.2f})',
+                                  caption=f'sim={sim:.2f} | patch {pidx}',
                                   width=150)
+
+            if boundary_patches:
+                st.markdown('**Boundary patches** — edge of cluster (may bleed into adjacent concept)')
+                cols2 = st.columns(3)
+                for i, (patch, path, pidx, brightness, variance, spatial, sim, _) in enumerate(boundary_patches):
+                    cols2[i % 3].image(patch,
+                                       caption=f'sim={sim:.2f} | patch {pidx}',
+                                       width=150)
 
         st.divider()
 

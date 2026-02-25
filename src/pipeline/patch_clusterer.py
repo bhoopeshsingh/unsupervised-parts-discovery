@@ -142,6 +142,75 @@ class PatchClusterer:
         print(f"Done. Cluster sizes: {np.bincount(self.labels_)}")
         return self.labels_
 
+    def smooth_labels(
+        self,
+        labels: np.ndarray,
+        image_ids: np.ndarray,
+        patch_ids: np.ndarray,
+        n_iter: int = 1,
+    ) -> np.ndarray:
+        """
+        Spatial coherence post-processing via majority-vote on the 28×28 patch grid.
+
+        For each foreground patch in each image:
+          - Build its 3×3 neighbourhood from the cluster label grid
+          - If the patch's cluster disagrees with the majority of its neighbours,
+            reassign it to the neighbourhood majority
+
+        This removes "stray" patches that landed in the wrong cluster — e.g. a
+        single background patch that got assigned to the cat_ear cluster — making
+        the semantic part maps visually cleaner and more spatially coherent.
+
+        Args:
+            labels    [N] — cluster id per patch (will be modified in-place copy)
+            image_ids [N] — which image each patch belongs to
+            patch_ids [N] — which of 784 grid positions (0–783)
+            n_iter        — smoothing iterations (1 is usually enough)
+        Returns:
+            smoothed labels [N]
+        """
+        labels = labels.copy()
+        unique_images = np.unique(image_ids)
+        total_changed = 0
+
+        for _ in range(n_iter):
+            new_labels = labels.copy()
+            for img_idx in unique_images:
+                img_mask = image_ids == img_idx
+                img_patch_ids = patch_ids[img_mask]
+                img_labels = labels[img_mask]
+                global_indices = np.where(img_mask)[0]
+
+                # Build sparse 28×28 grid (-1 = background/not in foreground)
+                grid = np.full((28, 28), -1, dtype=np.int32)
+                for pid, lbl in zip(img_patch_ids, img_labels):
+                    grid[pid // 28, pid % 28] = lbl
+
+                # Reassign isolated patches
+                for local_i, (pid, lbl) in enumerate(zip(img_patch_ids, img_labels)):
+                    r, c = pid // 28, pid % 28
+                    # 3×3 neighbourhood (excluding self)
+                    r0, r1 = max(0, r - 1), min(28, r + 2)
+                    c0, c1 = max(0, c - 1), min(28, c + 2)
+                    nbrs = grid[r0:r1, c0:c1].flatten()
+                    nbrs = nbrs[(nbrs >= 0) & (nbrs != lbl)]  # fg neighbours, diff cluster
+
+                    if len(nbrs) == 0:
+                        continue
+                    counts = np.bincount(nbrs, minlength=self.n_clusters)
+                    dominant = int(counts.argmax())
+                    # Only reassign if clear majority (≥ 2/3 of neighbours disagree)
+                    if counts[dominant] >= len(nbrs) * 0.67:
+                        new_labels[global_indices[local_i]] = dominant
+                        total_changed += 1
+
+            labels = new_labels
+
+        pct = 100 * total_changed / max(len(labels), 1)
+        print(f"  Spatial smoothing: reassigned {total_changed:,} patches ({pct:.1f}%) "
+              f"over {n_iter} iteration(s)")
+        return labels
+
     def predict(
         self,
         features: torch.Tensor,

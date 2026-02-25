@@ -63,6 +63,8 @@ dino:
   cluster_labels_path: cache/cluster_labels.pt
   fg_threshold: 0.6                 # keep top (1-fg_threshold) attended patches
                                     # 0.6 = top 40% — tighter foreground masking
+  use_multilayer: true              # concatenate layers 8, 10, 12 → 1152-dim features
+                                    # layer 8 = texture, layer 10 = structure, layer 12 = semantics
 
 # ==============================================================================
 # CLUSTERING  (MiniBatchKMeans on DINO patch features)
@@ -75,8 +77,9 @@ clustering:
   random_seed: 42
   method: gmm                       # "kmeans" | "gmm" — GMM handles unequal part sizes
   gmm_max_fit_samples: 150000       # subsample for GMM fitting (scalability)
-  use_pca: true                     # 384 → 64 dims
-  pca_dims: 64
+  use_pca: true                     # 1152 → 128 dims (multilayer needs more PCA dims)
+  pca_dims: 128
+  use_spatial_smoothing: true       # majority-vote cleanup of isolated patches
   use_spatial_features: true        # weight patch position during clustering
   spatial_weight: 0.4               # increased from 0.3 for more spatially coherent parts
 

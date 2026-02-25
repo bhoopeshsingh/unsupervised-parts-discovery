@@ -52,11 +52,15 @@ def extract_all(config_path: str = "configs/config.yaml",
     dcfg = cfg["dino"]
     cache_path = dcfg["features_cache"]
 
+    use_multilayer = dcfg.get("use_multilayer", False)
     extractor = DinoExtractor(
         model_name=dcfg["model"],
         device=dcfg["device"],
         image_size=dcfg["image_size"],
+        use_multilayer=use_multilayer,
     )
+    if use_multilayer:
+        print(f"Multi-layer mode: concatenating DINO layers 8, 10, 12 → {extractor.feat_dim}-dim features")
 
     # Load fine-tuned weights if provided
     if finetune_weights and Path(finetune_weights).exists():
@@ -154,8 +158,9 @@ def extract_all(config_path: str = "configs/config.yaml",
         "class_names": class_names,
         "image_labels": image_labels,
         "grid_size": 28,
-        "feat_dim": 384,
-        "fg_threshold": fg_threshold,   # record masking config used
+        "feat_dim": extractor.feat_dim,      # 384 single-layer, 1152 multilayer
+        "use_multilayer": use_multilayer,
+        "fg_threshold": fg_threshold,
     }
     Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
     torch.save(cache, cache_path)

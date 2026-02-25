@@ -18,24 +18,38 @@ warnings.filterwarnings("ignore")
 class DinoExtractor:
     """
     Wraps a frozen DINO ViT-S/8 model.
-    Extracts patch-level features: shape [784, 384] per 224x224 image.
-    784 = 28x28 spatial grid of 8x8 patches. 384 = embedding dimension for ViT-S.
+    Extracts patch-level features: shape [784, 384] per 224x224 image (single-layer),
+    or [784, 1152] when use_multilayer=True (layers 8, 10, 12 concatenated).
+
+    Multi-layer reasoning:
+      Layer  8 → local texture: stripe patterns, fur type, edge detail
+      Layer 10 → mid-level structure: part boundaries, shape outlines
+      Layer 12 → high-level semantics: what body part, object identity
+
+    Concatenating all three gives each patch a richer description that lets GMM
+    separate e.g. tabby fur vs smooth fur (differ in layer 8) even though both
+    look the same semantically (layer 12).
     """
 
     MEAN = [0.485, 0.456, 0.406]
     STD = [0.229, 0.224, 0.225]
+
+    # Indices into get_intermediate_layers(n=5) output → picks blocks 7,9,11 (layers 8,10,12)
+    _MULTILAYER_INDICES = (0, 2, 4)
 
     def __init__(
         self,
         model_name: str = "dino_vits8",
         device: str = "mps",
         image_size: int = 224,
+        use_multilayer: bool = False,
     ):
         self.device = torch.device(device)
         self.image_size = image_size
         self.patch_size = 8
         self.grid_size = image_size // self.patch_size  # 28
-        self.feat_dim = 384
+        self.use_multilayer = use_multilayer
+        self.feat_dim = 384 * len(self._MULTILAYER_INDICES) if use_multilayer else 384
 
         print(f"Loading {model_name} ...")
         self.model = torch.hub.load(
@@ -65,11 +79,22 @@ class DinoExtractor:
         Args:
             image_tensor [B, 3, 224, 224]
         Returns:
-            patch_features [B, 784, 384]
+            patch_features [B, 784, feat_dim]
+            feat_dim = 384  (single-layer) or 1152 (multilayer: layers 8,10,12)
         """
-        feats = self.model.get_intermediate_layers(image_tensor, n=1)[0]
-        # feats shape: [B, 785, 384] — index 0 is CLS token
-        return feats[:, 1:, :]  # drop CLS → [B, 784, 384]
+        if self.use_multilayer:
+            # get_intermediate_layers(n=5) returns last 5 blocks:
+            #   index 0 → block 7  (layer  8)
+            #   index 2 → block 9  (layer 10)
+            #   index 4 → block 11 (layer 12)
+            all_layers = self.model.get_intermediate_layers(image_tensor, n=5)
+            feats = torch.cat(
+                [all_layers[i][:, 1:, :] for i in self._MULTILAYER_INDICES], dim=-1
+            )  # [B, 784, 1152]
+        else:
+            feats = self.model.get_intermediate_layers(image_tensor, n=1)[0]
+            feats = feats[:, 1:, :]  # [B, 784, 384]
+        return feats
 
     @torch.no_grad()
     def extract_attention(self, image_tensor: torch.Tensor) -> torch.Tensor:
