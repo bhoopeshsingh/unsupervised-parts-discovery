@@ -20,7 +20,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import streamlit as st
-from tqdm import tqdm
 import torch.nn.functional as F
 import cv2
 
@@ -67,46 +66,6 @@ def analyze_cluster_foreground_likelihood(cluster_centers, labels_arr):
     
     return scores
 
-
-def compute_patch_quality(data, labels_arr):
-    """Compute quality scores for all patches."""
-    n_patches = len(data['image_ids'])
-    brightness_scores = np.zeros(n_patches, dtype=np.float32)
-    variance_scores   = np.zeros(n_patches, dtype=np.float32)
-    spatial_centrality = np.zeros(n_patches, dtype=np.float32)
-
-    n_images = len(data['image_paths'])
-
-    for img_idx in tqdm(range(n_images), desc='Computing patch quality'):
-        try:
-            img_path = data['image_paths'][img_idx]
-            img = Image.open(img_path).convert('RGB').resize((224, 224))
-            img_arr = np.array(img, dtype=np.float32)
-
-            mask = (data['image_ids'] == img_idx).numpy()
-            patch_indices = np.where(mask)[0]
-
-            for global_idx in patch_indices:
-                patch_idx = data['patch_ids'][global_idx].item()
-                row_p = patch_idx // 28
-                col_p = patch_idx % 28
-                r0, c0 = row_p * 8, col_p * 8
-
-                patch = img_arr[r0:r0+8, c0:c0+8]
-                if patch.size > 0:
-                    brightness_scores[global_idx] = patch.mean() / 255.0
-                    variance_scores[global_idx]   = patch.std()
-                    center_dist = np.sqrt((row_p - 14)**2 + (col_p - 14)**2)
-                    spatial_centrality[global_idx] = 1.0 / (1.0 + center_dist / 10.0)
-        except Exception:
-            continue
-
-    return {
-        'brightness': torch.from_numpy(brightness_scores),
-        'variance': torch.from_numpy(variance_scores),
-        'spatial_centrality': torch.from_numpy(spatial_centrality),
-        'n_patches': n_patches
-    }
 
 
 def compute_cluster_spatial_stats(cluster_id, data, labels_arr):
@@ -192,7 +151,7 @@ def get_cluster_patches_fast(cluster_id, data, labels_arr, quality_cache,
     
     # Load patches WITH CONTEXT
     patches = []
-    for enum_i, (idx, sim, is_bdry) in enumerate(
+    for _, (idx, sim, is_bdry) in enumerate(
         zip(selected_global, selected_sims, is_boundary)
     ):
         img_idx   = int(data['image_ids'][idx].item())
@@ -299,15 +258,6 @@ def run_classify_tab(cfg):
         )
         return
 
-    # ── load models (cached across reruns) ────────────────────
-    extractor = load_dino_extractor(
-        cfg["dino"]["model"],
-        cfg["dino"]["device"],
-        cfg["dino"]["image_size"],
-        cfg["dino"].get("use_multilayer", False),
-    )
-    clf, vectors = load_classifier_and_vectors(clf_path, vec_path)
-
     # ── file uploader ──────────────────────────────────────────
     uploaded = st.file_uploader(
         "Choose an image (jpg / png)",
@@ -318,6 +268,15 @@ def run_classify_tab(cfg):
     if uploaded is None:
         st.info("👆 Upload an image to get started.")
         return
+
+    # ── load models only once an image is present ──────────────
+    extractor = load_dino_extractor(
+        cfg["dino"]["model"],
+        cfg["dino"]["device"],
+        cfg["dino"]["image_size"],
+        cfg["dino"].get("use_multilayer", False),
+    )
+    clf, vectors = load_classifier_and_vectors(clf_path, vec_path)
 
     # Show upload preview
     pil_img = Image.open(uploaded).convert("RGB")
@@ -345,7 +304,6 @@ def run_classify_tab(cfg):
             tmp_path, fg_threshold=fg_threshold
         )
         fg_feats = all_feats[fg_mask]
-        concept_names = list(vectors.keys())
 
         # Load clusterer + label mapping for cluster-proportion scoring
         clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
@@ -366,19 +324,29 @@ def run_classify_tab(cfg):
             patch_ids=fg_patch_ids,
         )
 
-        score_vec = np.array([[concept_scores_dict[c] for c in concept_names]])
+        # Load the concept names the classifier's StandardScaler was fitted on.
+        # This is the ground truth for column order and count — must not drift.
+        _scores_cache = cfg["concepts"].get("scores_cache", "cache/concept_scores.pt")
+        clf_concept_names = torch.load(_scores_cache, weights_only=True)["concept_names"]
+
+        # Build score_vec in the exact order/shape the scaler expects.
+        # Concepts missing from current scoring default to 0.0.
+        score_vec = np.array([[concept_scores_dict.get(c, 0.0) for c in clf_concept_names]])
         preds, _, confs = clf.predict(score_vec)
-        explanation = clf.explain(score_vec, concept_names)
+        explanation = clf.explain(score_vec, clf_concept_names)
 
         result = {
             "prediction": preds[0],
             "confidence": float(confs[0]),
-            "concept_scores": concept_scores_dict,
-            # deviation_from_cat: positive = above typical cat = pushes toward cat
+            # Scores and contributions keyed by clf_concept_names for display table
+            "concept_scores": {c: concept_scores_dict.get(c, 0.0) for c in clf_concept_names},
             "contributions": {
                 item["concept"]: item["deviation_from_cat"] for item in explanation
             },
         }
+
+        # For spatial map: only concepts that exist in vectors can be visualised
+        concept_names = [c for c in clf_concept_names if c in vectors]
         concept_map, patch_sims = get_spatial_concept_map(
             concept_names, vectors, all_feats
         )
@@ -517,10 +485,17 @@ def run_streamlit():
             )
         fg_scores = st.session_state.fg_scores
 
-        # Compute patch quality scores (kept in session memory)
+        # Load pre-computed patch quality (generated by --stage cluster)
+        quality_cache_path = cfg['dino'].get('patch_quality_cache', 'cache/patch_quality.pt')
+        if not Path(quality_cache_path).exists():
+            st.error(
+                f"Patch quality cache not found: `{quality_cache_path}`\n\n"
+                "Re-run the cluster stage to generate it:\n"
+                "```\npython experiments/run_pipeline.py --stage cluster\n```"
+            )
+            st.stop()
         if 'quality_cache' not in st.session_state:
-            with st.spinner('Computing patch quality (~2-3 min)...'):
-                st.session_state.quality_cache = compute_patch_quality(data, labels_arr)
+            st.session_state.quality_cache = torch.load(quality_cache_path, weights_only=False)
         quality_cache = st.session_state.quality_cache
 
         # Load existing labels
@@ -550,7 +525,7 @@ def run_streamlit():
             size = int((labels_arr == cid).sum())
             fg_score = fg_scores[cid]
             label = existing.get(str(cid), {}).get('label', '—')
-            if fg_score > 0.6:
+            if fg_score > 0.5:
                 emoji = "🐱"
             elif fg_score > 0.4:
                 emoji = "❓"
@@ -579,7 +554,7 @@ def run_streamlit():
                          help='Lower=more centered (cat), higher=more edge (background)')
 
         # Recommendation
-        if fg_score > 0.6 and spatial_mean < 8:
+        if fg_score > 0.5 and spatial_mean < 8:
             st.success('✅ This cluster is likely a **cat part** (centered, distinct features)')
         elif fg_score < 0.4 or spatial_mean > 12:
             st.warning('⚠️ This cluster is likely **background/noise** (edge patches, less distinct)')

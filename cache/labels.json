@@ -1,62 +1,50 @@
 {
-  "0": {
-    "label": "cat_fur_light",
-    "include": true,
-    "confidence": 2,
-    "notes": "light/smooth cat fur, 95% cat"
-  },
-  "1": {
-    "label": "dark_texture",
-    "include": true,
-    "confidence": 2,
-    "notes": "dark mixed texture, some bird faces"
+  "6": {
+    "label": "noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
   },
   "2": {
-    "label": "dark_feathers",
+    "label": "eye",
     "include": true,
     "confidence": 3,
-    "notes": "62% bird \u2014 dark bird feather patches"
-  },
-  "3": {
-    "label": "cat_fur_tabby",
-    "include": true,
-    "confidence": 2,
-    "notes": "tabby/mottled grey cat fur, 98% cat"
-  },
-  "4": {
-    "label": "cat_face",
-    "include": true,
-    "confidence": 3,
-    "notes": "cat face region \u2014 nose, chin, 98% cat"
-  },
-  "5": {
-    "label": "cat_ears",
-    "include": true,
-    "confidence": 3,
-    "notes": "cat ears \u2014 top spatial region, 99% cat"
-  },
-  "6": {
-    "label": "cat_eyes",
-    "include": true,
-    "confidence": 2,
-    "notes": "cat face + eye area patches, 96% cat"
-  },
-  "7": {
-    "label": "cat_fur_smooth",
-    "include": true,
-    "confidence": 2,
-    "notes": "smooth light fur, 94% cat"
-  },
-  "8": {
-    "label": "cat_fur_pale",
-    "include": true,
-    "confidence": 2,
-    "notes": "pale/white patches, 93% cat"
+    "notes": ""
   },
   "9": {
-    "label": "feathers",
+    "label": "fur",
     "include": true,
     "confidence": 3,
-    "notes": "24% bird \u2014 mixed feather/fur texture"
+    "notes": ""
+  },
+  "7": {
+    "label": "forehead",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "8": {
+    "label": "noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
+  },
+  "0": {
+    "label": "sideface",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "1": {
+    "label": "front-face",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "3": {
+    "label": "ear",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
   }
 }

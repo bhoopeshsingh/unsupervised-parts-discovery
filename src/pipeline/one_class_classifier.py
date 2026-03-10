@@ -35,6 +35,12 @@ class CatConceptOneClassClassifier:
         # Store cat centroid for explainability
         self.cat_centroid = X.mean(axis=0)
         self.concept_std = X.std(axis=0)
+
+        # Store decision function scale from training so single-image inference
+        # doesn't divide by std([x]) = 0 and produce meaningless 100% confidence.
+        train_dec = self.clf.decision_function(X)
+        self.decision_scale = float(train_dec.std()) if train_dec.std() > 1e-6 else 1.0
+
         print(f"Fitted on {len(X)} cat images, {X.shape[1]} concepts")
         return self
 
@@ -45,15 +51,12 @@ class CatConceptOneClassClassifier:
         score < 0  → not cat (lower = more confident not-cat)
         """
         X = self.scaler.transform(concept_scores)
+        raw_scores = self.clf.decision_function(X)
 
-        if self.method == 'ocsvm':
-            # decision_function gives signed distance from boundary
-            raw_scores = self.clf.decision_function(X)
-        else:
-            raw_scores = self.clf.decision_function(X)
-
-        # Normalise to [-1, 1] range roughly
-        scores = np.tanh(raw_scores / raw_scores.std())
+        # Use training-time decision scale — stable for any batch size including 1.
+        # Previously used raw_scores.std() which is 0 for a single image → always 100%.
+        scale = getattr(self, 'decision_scale', None) or max(float(raw_scores.std()), 1e-6)
+        scores = np.tanh(raw_scores / scale)
         predictions = ['cat' if s > 0 else 'not_cat' for s in scores]
 
         # Confidence = how far from decision boundary

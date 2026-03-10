@@ -23,6 +23,8 @@ import torch
 import torch.nn.functional as F
 import yaml
 from pathlib import Path
+from PIL import Image
+from tqdm import tqdm
 
 
 def stage_extract(cfg):
@@ -37,7 +39,9 @@ def stage_extract(cfg):
         print(f"Fine-tuned weights found at {ft_path} — will be loaded during extraction.")
     use_ml = cfg["dino"].get("use_multilayer", False)
     print(f"Feature mode: {'multi-layer (8,10,12) → 1152-dim' if use_ml else 'single-layer → 384-dim'}")
-    return extract_all(finetune_weights=ft_path if Path(ft_path).exists() else None)
+    result = extract_all(finetune_weights=ft_path if Path(ft_path).exists() else None)
+    stage_patch_quality(cfg)
+    return result
 
 
 def stage_cluster(cfg):
@@ -87,7 +91,67 @@ def stage_cluster(cfg):
     clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
     torch.save(torch.tensor(labels), cluster_labels_path)
     clusterer.save(clusterer_path)
+
+    # Cluster IDs are reassigned on every run — old semantic labels are now wrong.
+    # Clear labels.json so the GUI forces a fresh labeling pass.
+    labels_path = Path(cfg["concepts"]["labels_path"])
+    if labels_path.exists():
+        labels_path.unlink()
+        print(f"\n  ⚠  Cleared stale semantic labels: {labels_path}")
+        print("     Cluster IDs have changed — re-label clusters in the GUI before")
+        print("     running --stage concepts.")
+
     return clusterer, labels
+
+
+def stage_patch_quality(cfg):
+    """
+    Pre-compute per-patch brightness, variance, and spatial centrality for every
+    foreground patch in the features cache.  Saves to cache/patch_quality.pt so
+    the labeling GUI can load it instantly without touching any images at startup.
+    """
+    print("\n" + "=" * 60)
+    print("STAGE 3b: Patch Quality Pre-computation")
+    print("=" * 60)
+
+    data = torch.load(cfg["dino"]["features_cache"], weights_only=False)
+    n_patches = len(data["image_ids"])
+    n_images  = len(data["image_paths"])
+
+    brightness        = np.zeros(n_patches, dtype=np.float32)
+    variance_scores   = np.zeros(n_patches, dtype=np.float32)
+    spatial_centrality = np.zeros(n_patches, dtype=np.float32)
+
+    for img_idx in tqdm(range(n_images), desc="  Patch quality"):
+        try:
+            img_arr = np.array(
+                Image.open(data["image_paths"][img_idx]).convert("RGB").resize((224, 224)),
+                dtype=np.float32,
+            )
+            patch_indices = np.where((data["image_ids"] == img_idx).numpy())[0]
+            for global_idx in patch_indices:
+                patch_idx = data["patch_ids"][global_idx].item()
+                row_p, col_p = divmod(int(patch_idx), 28)
+                r0, c0 = row_p * 8, col_p * 8
+                patch = img_arr[r0:r0 + 8, c0:c0 + 8]
+                if patch.size > 0:
+                    brightness[global_idx]         = patch.mean() / 255.0
+                    variance_scores[global_idx]    = patch.std()
+                    center_dist = np.sqrt((row_p - 14) ** 2 + (col_p - 14) ** 2)
+                    spatial_centrality[global_idx] = 1.0 / (1.0 + center_dist / 10.0)
+        except Exception:
+            continue
+
+    out = {
+        "brightness":         torch.from_numpy(brightness),
+        "variance":           torch.from_numpy(variance_scores),
+        "spatial_centrality": torch.from_numpy(spatial_centrality),
+        "n_patches":          n_patches,
+    }
+    cache_path = cfg["dino"].get("patch_quality_cache", "cache/patch_quality.pt")
+    torch.save(out, cache_path)
+    print(f"  Saved patch quality cache → {cache_path}  ({n_patches:,} patches)")
+    return out
 
 
 def stage_concepts(cfg):
@@ -117,7 +181,7 @@ def stage_classify(cfg):
     concept_names = scores_data["concept_names"]
 
     print(f"Training on {len(scores)} cat images × {len(concept_names)} concepts")
-    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.05)
+    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.1)
     clf.fit(scores)
 
     preds, dec_scores, confs = clf.predict(scores)
@@ -154,7 +218,7 @@ def stage_finetune(cfg):
 
     ftcfg = cfg.get("finetune", {})
     n_epochs        = ftcfg.get("n_epochs", 3)
-    lr              = ftcfg.get("lr", 1e-5)
+    lr              = float(ftcfg.get("lr", 1e-5))
     n_pairs         = ftcfg.get("n_pairs", 512)
     batch_size      = ftcfg.get("batch_size", 16)
     save_path       = ftcfg.get("save_path", "cache/dino_finetuned.pt")
@@ -194,11 +258,14 @@ def stage_finetune(cfg):
     )
     print(f"Dataset: {len(dataset)} images  |  batch_size={batch_size}")
 
-    # Create finetuner
+    # Create finetuner — pass use_multilayer so it unfreezes the right blocks
+    # and uses the same feature extraction as the extract stage
+    use_multilayer = cfg["dino"].get("use_multilayer", False)
     finetuner = DinoSemanticFinetuner(
         extractor.model,
         device=extractor.device,
         lr=lr,
+        use_multilayer=use_multilayer,
     )
 
     print(f"\nFine-tuning for {n_epochs} epoch(s)  (lr={lr}, n_pairs={n_pairs})")

@@ -61,6 +61,7 @@ dino:
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
+  patch_quality_cache: cache/patch_quality.pt
   fg_threshold: 0.6                 # keep top (1-fg_threshold) attended patches
                                     # 0.6 = top 40% — tighter foreground masking
   use_multilayer: true              # concatenate layers 8, 10, 12 → 1152-dim features
@@ -112,7 +113,7 @@ classification:
 finetune:
   save_path: cache/dino_finetuned.pt
   n_epochs: 3                       # 3 epochs is enough for semantic alignment
-  lr: 1e-5                          # small LR — only last 2 blocks unfreeze
+  lr: 0.00001                          # small LR — only last 2 blocks unfreeze
   batch_size: 16
   n_pairs: 512                      # contrastive pairs per batch
 

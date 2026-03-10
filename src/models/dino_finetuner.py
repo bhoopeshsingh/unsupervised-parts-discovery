@@ -1,8 +1,11 @@
 # src/models/dino_finetuner.py
 """
-Fine-tunes last 2 DINO transformer blocks using cluster pseudo-labels.
-Semantic consistency loss: same cluster → similar embeddings,
-different cluster → push apart.
+Fine-tunes DINO transformer blocks using cluster pseudo-labels.
+Semantic consistency loss: same cluster → similar embeddings, different cluster → push apart.
+
+Single-layer mode (use_multilayer=False): unfreezes blocks 10, 11 (layer 12 only).
+Multi-layer mode  (use_multilayer=True):  unfreezes blocks 7, 9, 11 (layers 8, 10, 12) —
+  the same blocks whose outputs are concatenated during feature extraction.
 
 Usage (via run_pipeline.py):
   python experiments/run_pipeline.py --stage finetune
@@ -52,25 +55,43 @@ class ImagePathDataset(Dataset):
 
 class DinoSemanticFinetuner:
     """
-    Fine-tunes last 2 DINO blocks using cluster assignments as pseudo-labels.
-    Domain knowledge = the semantic cluster structure you discovered.
+    Fine-tunes DINO transformer blocks using cluster assignments as pseudo-labels.
+    Semantic consistency loss: same cluster → similar embeddings,
+    different cluster → push apart.
+
+    use_multilayer=True  → extracts layers 8, 10, 12. Unfreezes blocks 9 and 11 only.
+                           Block 7 (layer 8 = texture) stays frozen — its pretrained
+                           texture features are too valuable to disturb with pseudo-labels.
+    use_multilayer=False → extracts layer 12 only. Unfreezes last 2 blocks (10, 11).
     """
 
-    def __init__(self, dino_model, device, lr=1e-5):
+    # Mirror DinoExtractor: get_intermediate_layers(n=5) index → block index
+    _MULTILAYER_INDICES = (0, 2, 4)   # → blocks 7, 9, 11 (layers 8, 10, 12)
+
+    # Block 7 (layer 8) produces pretrained texture features crucial for part separation.
+    # Fine-tuning it with a weak pseudo-label signal degrades these representations.
+    # Only unfreeze blocks 9 and 11 — adapt structure+semantics, preserve texture.
+    _MULTILAYER_BLOCKS  = ("blocks.9", "blocks.11")
+    _SINGLELAYER_BLOCKS = ("blocks.10", "blocks.11")
+
+    def __init__(self, dino_model, device, lr=1e-5, use_multilayer=False):
         self.model = dino_model
         self.device = device
+        self.use_multilayer = use_multilayer
 
         # Freeze all parameters first
         for param in self.model.parameters():
             param.requires_grad = False
 
-        # Unfreeze only last 2 transformer blocks
+        # Bug 3 fix: unfreeze the blocks that actually contribute to the extracted features
+        unfreeze = self._MULTILAYER_BLOCKS if use_multilayer else self._SINGLELAYER_BLOCKS
         for name, param in self.model.named_parameters():
-            if "blocks.10" in name or "blocks.11" in name:
+            if any(b in name for b in unfreeze):
                 param.requires_grad = True
 
         trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"Trainable params: {trainable:,}  (last 2 blocks only)")
+        block_desc = "blocks 9,11 (layers 10,12 — block 7/layer 8 frozen)" if use_multilayer else "blocks 10,11"
+        print(f"Trainable params: {trainable:,}  ({block_desc})")
 
         self.optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, self.model.parameters()),
@@ -111,21 +132,32 @@ class DinoSemanticFinetuner:
         """
         self.model.train()
         total_loss = 0.0
+        n_patches = 784  # 28×28 spatial grid
 
         for batch_imgs, _ in dataloader:
             batch_imgs = batch_imgs.to(self.device)
             B = batch_imgs.shape[0]
 
-            # Extract patch features from current model state
-            feats = self.model.get_intermediate_layers(batch_imgs, n=1)[0]
-            # feats: [B, 785, 384] — index 0 is CLS
-            feats = feats[:, 1:, :]          # [B, 784, 384]
-            flat_feats = feats.reshape(B * 784, -1)
+            # Bug 1 fix: match the same feature extraction used during inference
+            if self.use_multilayer:
+                all_layers = self.model.get_intermediate_layers(batch_imgs, n=5)
+                feats = torch.cat(
+                    [all_layers[i][:, 1:, :] for i in self._MULTILAYER_INDICES], dim=-1
+                )  # [B, 784, 1152]
+            else:
+                feats = self.model.get_intermediate_layers(batch_imgs, n=1)[0]
+                feats = feats[:, 1:, :]      # [B, 784, 384]
+
+            flat_feats = feats.reshape(B * n_patches, -1)   # [B*784, D]
+
+            # Bug 2 fix: generate patch_ids so the clusterer can append spatial dims
+            # patch_ids[i] = 0..783, repeating for each image in the batch
+            patch_ids = torch.arange(n_patches).repeat(B)   # [B*784]
 
             # Get pseudo-labels from clusterer (no_grad — clusterer is fixed)
             with torch.no_grad():
                 pseudo_labels = torch.tensor(
-                    clusterer.predict(flat_feats.detach().cpu()),
+                    clusterer.predict(flat_feats.detach().cpu(), patch_ids=patch_ids),
                     device=self.device,
                 )
 
