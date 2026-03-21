@@ -5,14 +5,16 @@
 dataset:
   name: "custom"
   root: "data"
-  custom_path: "data/masked/train/cat"
+  custom_path: "data/masked/train"  # all three class subdirs live here
   download: true
 
 paths:
   classes:
     - "cat"
-  train_split: 0.9
-  val_split: 0.1
+    - "car"
+    - "bird"
+  train_split: 0.8
+  val_split: 0.2
   img_size: 128
   num_channels: 3
 
@@ -46,7 +48,11 @@ device: "mps"   # mps = M-series Mac | cuda = NVIDIA | cpu = fallback
 # DINO FEATURE EXTRACTION
 # ==============================================================================
 # INPUT:  images under dino.data_root/{class}/*.png
-# OUTPUT: cache/dino_features.pt  [N_patches, 384]
+# OUTPUT: cache/dino_features.pt
+#
+# Feature shape per patch:
+#   single-layer  → [N_patches, 384]
+#   multi-layer   → [N_patches, 1152]  (layers 8, 10, 12 concatenated)
 # ==============================================================================
 dino:
   model: dino_vits8
@@ -57,44 +63,55 @@ dino:
   pin_memory: false
   cache_dir: cache/
   data_root: data/masked/train
-  classes: ["cat"]                  # cat only — concept discovery must be pure
+  classes: ["cat", "car", "bird"]   # all three classes
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl
   cluster_labels_path: cache/cluster_labels.pt
   patch_quality_cache: cache/patch_quality.pt
-  fg_threshold: 0.6                 # keep top (1-fg_threshold) attended patches
-                                    # 0.6 = top 40% — tighter foreground masking
+  fg_threshold: 0.75                # keep top 25% most-attended (foreground) patches
+                                    # DINO CLS attention naturally highlights objects
+                                    # 0.75 = more aggressive — drops edge/background patches
   use_multilayer: true              # concatenate layers 8, 10, 12 → 1152-dim features
                                     # layer 8 = texture, layer 10 = structure, layer 12 = semantics
 
 # ==============================================================================
-# CLUSTERING  (MiniBatchKMeans on DINO patch features)
+# CLUSTERING
+# ==============================================================================
+# n_clusters guidance for 3 classes:
+#   ~8 concepts per class × 3 classes = 24 starting point.
+#   Run:  python experiments/find_optimal_k.py  to confirm optimal K.
 # ==============================================================================
 clustering:
-  n_clusters: 10                    # confirmed optimal via find_optimal_k.py (cat-only)
+  n_clusters: 30                    # 10 parts per class × 3 classes; tune with find_optimal_k.py
   n_init: 20
   max_iter: 300
   batch_size: 8192
   random_seed: 42
   method: gmm                       # "kmeans" | "gmm" — GMM handles unequal part sizes
-  gmm_max_fit_samples: 150000       # subsample for GMM fitting (scalability)
-  use_pca: true                     # 1152 → 128 dims (multilayer needs more PCA dims)
+  gmm_max_fit_samples: 300000       # increased for 3× more patches vs cat-only
+  use_pca: true                     # 1152 → 128 dims before clustering
   pca_dims: 128
   use_spatial_smoothing: true       # majority-vote cleanup of isolated patches
   use_spatial_features: true        # weight patch position during clustering
-  spatial_weight: 0.4               # increased from 0.3 for more spatially coherent parts
+  spatial_weight: 0.4
 
 # ==============================================================================
 # CONCEPT LABELING  (human-in-the-loop via labeling/label_tool.py)
+# ==============================================================================
+# NOTE: cache/labels.json from the cat-only run is stale.
+#       After re-clustering with 3 classes, re-label via:
+#         streamlit run labeling/label_tool.py
 # ==============================================================================
 concepts:
   labels_path: cache/labels.json
   vectors_cache: cache/concept_vectors.pt
   scores_cache: cache/concept_scores.pt
-  topk_patches: 10                  # top-K mean scoring — more discriminating than max
+  topk_patches: 10                  # top-K mean scoring per concept
 
 # ==============================================================================
 # CLASSIFICATION  (linear probe on concept activation scores)
+# ==============================================================================
+# Now a 3-class problem: cat vs car vs bird
 # ==============================================================================
 classification:
   C: 1.0
@@ -105,17 +122,17 @@ classification:
   explanation_dir: cache/
 
 # ==============================================================================
-# DINO FINE-TUNING  (optional — run before extract to improve feature quality)
+# DINO FINE-TUNING  (optional — improves feature quality before extract stage)
 # ==============================================================================
-# Sequence:  --stage extract → --stage cluster → --stage finetune
-#            → --stage extract (again) → --stage cluster (again) → rest of pipeline
+# Recommended sequence:
+#   extract → cluster → finetune → extract (again) → cluster (again) → label → classify
 # ==============================================================================
 finetune:
   save_path: cache/dino_finetuned.pt
   n_epochs: 3                       # 3 epochs is enough for semantic alignment
-  lr: 0.00001                          # small LR — only last 2 blocks unfreeze
+  lr: 0.00001                       # small LR — only last 2 blocks unfreeze
   batch_size: 16
-  n_pairs: 512                      # contrastive pairs per batch
+  n_pairs: 1024                     # increased from 512 — more class variety available
 
 # ==============================================================================
 # EXPERIMENT TRACKING

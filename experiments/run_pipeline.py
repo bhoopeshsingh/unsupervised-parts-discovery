@@ -27,10 +27,50 @@ from PIL import Image
 from tqdm import tqdm
 
 
+def _clear_files(paths, reason=""):
+    """Delete cache files that exist; print a summary of what was removed."""
+    cleared = [p for p in paths if Path(p).exists()]
+    if cleared:
+        tag = f" ({reason})" if reason else ""
+        print(f"\n  🗑  Clearing stale cache{tag}:")
+        for p in cleared:
+            Path(p).unlink()
+            print(f"       ✗  {p}")
+    return cleared
+
+
+def _clusterer_siblings(clusterer_path: str):
+    """Return all auto-generated files that accompany a saved clusterer."""
+    base = clusterer_path.replace(".pkl", "")
+    return [
+        clusterer_path,
+        base + "_centers.pt",
+        base + "_meta.pt",
+        base + "_pca.pkl",
+    ]
+
+
 def stage_extract(cfg):
     print("\n" + "=" * 60)
     print("STAGE 1+2: Feature Extraction + Caching")
     print("=" * 60)
+
+    # Wipe every downstream file — features are changing so nothing below is valid
+    clusterer_path = cfg["dino"].get("clusterer_path", "cache/kmeans.pkl")
+    _clear_files(
+        [
+            cfg["dino"]["features_cache"],
+            cfg["dino"].get("patch_quality_cache", "cache/patch_quality.pt"),
+            cfg["dino"].get("cluster_labels_path", "cache/cluster_labels.pt"),
+            *_clusterer_siblings(clusterer_path),
+            cfg["concepts"]["labels_path"],
+            cfg["concepts"].get("vectors_cache", "cache/concept_vectors.pt"),
+            cfg["concepts"].get("scores_cache", "cache/concept_scores.pt"),
+            cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl"),
+        ],
+        reason="re-extract invalidates all downstream cache",
+    )
+
     from experiments.extract_features import extract_all
 
     # If fine-tuned weights exist, load them before extracting
@@ -92,14 +132,18 @@ def stage_cluster(cfg):
     torch.save(torch.tensor(labels), cluster_labels_path)
     clusterer.save(clusterer_path)
 
-    # Cluster IDs are reassigned on every run — old semantic labels are now wrong.
-    # Clear labels.json so the GUI forces a fresh labeling pass.
-    labels_path = Path(cfg["concepts"]["labels_path"])
-    if labels_path.exists():
-        labels_path.unlink()
-        print(f"\n  ⚠  Cleared stale semantic labels: {labels_path}")
-        print("     Cluster IDs have changed — re-label clusters in the GUI before")
-        print("     running --stage concepts.")
+    # Cluster IDs are reassigned on every run — everything built on top of them is stale.
+    _clear_files(
+        [
+            cfg["concepts"]["labels_path"],
+            cfg["concepts"].get("vectors_cache", "cache/concept_vectors.pt"),
+            cfg["concepts"].get("scores_cache", "cache/concept_scores.pt"),
+            cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl"),
+        ],
+        reason="re-cluster invalidates labels, concept vectors, scores, and classifier",
+    )
+    print("\n  ⚠  Re-label clusters in the GUI before running --stage concepts:")
+    print("       streamlit run labeling/label_tool.py")
 
     return clusterer, labels
 

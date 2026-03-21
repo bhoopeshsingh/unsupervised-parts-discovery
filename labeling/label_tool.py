@@ -92,6 +92,7 @@ def get_cluster_patches_fast(cluster_id, data, labels_arr, quality_cache,
                               n_samples=9,
                               brightness_threshold=0.15,
                               variance_threshold=10.0,
+                              spatial_centrality_threshold=0.3,
                               context_size=72,
                               part_box_size=24):
     """
@@ -127,8 +128,14 @@ def get_cluster_patches_fast(cluster_id, data, labels_arr, quality_cache,
     # cosine_sims[i] = 1.0 → perfect match to cluster centre (most representative)
     # cosine_sims[i] = low → boundary/outlier patch
 
-    # ── Filter by basic quality (remove pure black/blank patches) ──────────
-    quality_ok = (brightness >= brightness_threshold) & (variance >= variance_threshold)
+    # ── Filter by quality + spatial centrality (remove edge/background patches) ──
+    # spatial_centrality = 1/(1+dist) → 1.0=image centre, ~0.0=image edge
+    # Keep patches with value >= threshold (i.e. sufficiently central)
+    quality_ok = (
+        (brightness >= brightness_threshold) &
+        (variance >= variance_threshold) &
+        (spatial >= spatial_centrality_threshold)
+    )
     good_local = np.where(quality_ok)[0]
 
     if len(good_local) == 0:
@@ -503,6 +510,13 @@ def run_streamlit():
         if Path(labels_path).exists():
             existing = json.load(open(labels_path))
 
+        # Initialize selected cluster in session state
+        if 'selected_cluster' not in st.session_state:
+            st.session_state.selected_cluster = 0
+        # Clamp in case n_clusters changed
+        if st.session_state.selected_cluster >= n_clusters:
+            st.session_state.selected_cluster = 0
+
         # Sidebar: Progress
         st.sidebar.header('Progress')
         labeled_count = sum(1 for v in existing.values() if v.get('label', ''))
@@ -518,28 +532,35 @@ def run_streamlit():
                                          help='Larger = more surrounding face/context visible')
         part_box_size = st.sidebar.slider('Part box size (red square)', 8, 48, 24, 8,
                                           help='8 = single patch (tiny), 24 = ~3× patches (e.g. eye scale), 32 = larger part')
+        spatial_centrality_thresh = st.sidebar.slider(
+            'Min spatial centrality', 0.0, 1.0, 0.3, 0.05,
+            help='1.0 = image centre, 0.0 = image edge. Higher = only show central object patches. 0.0 = no filter.'
+        )
 
-        # Sidebar: Cluster overview
-        st.sidebar.header('Cluster Overview')
+        # Sidebar: Clickable cluster list
+        st.sidebar.header('Clusters')
         for cid in range(n_clusters):
             size = int((labels_arr == cid).sum())
             fg_score = fg_scores[cid]
-            label = existing.get(str(cid), {}).get('label', '—')
+            clabel = existing.get(str(cid), {}).get('label', '—')
             if fg_score > 0.5:
                 emoji = "🐱"
             elif fg_score > 0.4:
                 emoji = "❓"
             else:
                 emoji = "🌫️"
-            st.sidebar.caption(f'{emoji} C{cid}: {label[:15]} ({size//1000}k, fg={fg_score:.2f})')
+            btn_label = f'{emoji} C{cid}: {clabel[:12]} ({size//1000}k)'
+            is_selected = st.session_state.selected_cluster == cid
+            if st.sidebar.button(
+                btn_label,
+                key=f'cluster_btn_{cid}',
+                type='primary' if is_selected else 'secondary',
+                use_container_width=True,
+            ):
+                st.session_state.selected_cluster = cid
+                st.rerun()
 
-        # Main: Cluster selection
-        cluster_id = st.selectbox(
-            'Select cluster to label:',
-            list(range(n_clusters)),
-            format_func=lambda x: f'Cluster {x}' + (
-                f' — {existing.get(str(x),{}).get("label","")}' if str(x) in existing else '')
-        )
+        cluster_id = st.session_state.selected_cluster
 
         # Show cluster analysis
         cluster_size = int((labels_arr == cluster_id).sum())
@@ -568,6 +589,7 @@ def run_streamlit():
                 n_samples=n_samples,
                 brightness_threshold=brightness_thresh,
                 variance_threshold=variance_thresh,
+                spatial_centrality_threshold=spatial_centrality_thresh,
                 context_size=context_size,
                 part_box_size=part_box_size
             )
@@ -660,6 +682,7 @@ def run_streamlit():
             if st.button('⏩ Next', use_container_width=True):
                 for cid in range(cluster_id + 1, n_clusters):
                     if str(cid) not in existing or not existing[str(cid)].get('label'):
+                        st.session_state.selected_cluster = cid
                         st.rerun()
                         break
 
