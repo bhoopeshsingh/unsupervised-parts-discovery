@@ -44,33 +44,41 @@ def create_dataloaders(
     
     # Create full training dataset
     if data_config['name'] == 'custom':
-        import os
-        full_train_dataset = CustomImageFolder(
-            root=os.path.join(data_config['custom_path'], 'train'),
-            transform=train_transform,
+        # For custom dataset without train/val subfolders, we use the root directly
+        # and split it using random_split
+        full_dataset = CustomImageFolder(
+            root=data_config['custom_path'],
+            transform=train_transform,  # Use train transform initially
             classes=data_config.get('classes', None)
         )
-    else:
-        full_train_dataset = CIFAR10Subset(
-            root=data_config['root'],
-            train=True,
-            transform=train_transform,
-            download=data_config.get('download', True),
-            classes=data_config.get('classes', None)
-        )
-    
-    
-    if data_config['name'] == 'custom':
-        # For custom dataset with pre-split folders, we don't use random_split
-        # We just use the datasets directly
-        train_dataset = full_train_dataset
         
-        import os
-        val_dataset = CustomImageFolder(
-            root=os.path.join(data_config['custom_path'], 'val'),
+        # Split into train and validation
+        val_split = data_config.get('val_split', 0.2)
+        num_val = int(len(full_dataset) * val_split)
+        num_train = len(full_dataset) - num_val
+        
+        # Better approach: Instantiate full dataset twice with different transforms
+        train_full = CustomImageFolder(
+            root=data_config['custom_path'],
+            transform=train_transform,
+            classes=data_config.get('classes', None)
+        )
+        
+        val_full = CustomImageFolder(
+            root=data_config['custom_path'],
             transform=val_transform,
             classes=data_config.get('classes', None)
         )
+        
+        # Use the same indices for split
+        indices = torch.randperm(len(train_full), generator=torch.Generator().manual_seed(data_config.get('seed', 42))).tolist()
+        
+        train_indices = indices[:num_train]
+        val_indices = indices[num_train:]
+        
+        from torch.utils.data import Subset
+        train_dataset = Subset(train_full, train_indices)
+        val_dataset = Subset(val_full, val_indices)
     else:
         # Split into train and validation
         val_split = data_config.get('val_split', 0.2)
@@ -103,7 +111,7 @@ def create_dataloaders(
         batch_size=dataloader_config['batch_size'],
         shuffle=dataloader_config.get('shuffle_train', True),
         num_workers=dataloader_config.get('num_workers', 4),
-        pin_memory=dataloader_config.get('pin_memory', True),
+        pin_memory=dataloader_config.get('pin_memory', False),  # False for MPS
         drop_last=dataloader_config.get('drop_last', True)
     )
     
@@ -112,7 +120,7 @@ def create_dataloaders(
         batch_size=dataloader_config['batch_size'],
         shuffle=dataloader_config.get('shuffle_val', False),
         num_workers=dataloader_config.get('num_workers', 4),
-        pin_memory=dataloader_config.get('pin_memory', True),
+        pin_memory=dataloader_config.get('pin_memory', False),  # False for MPS
         drop_last=False
     )
     

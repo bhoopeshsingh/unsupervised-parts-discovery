@@ -148,27 +148,55 @@ class CustomImageFolder(Dataset):
             self.class_to_idx = {c: i for i, c in enumerate(classes)}
             for class_name in classes:
                 class_dir = os.path.join(root, class_name)
-                if not os.path.exists(class_dir):
-                    print(f"Warning: Class directory not found: {class_dir}")
-                    continue
-                    
-                for fname in os.listdir(class_dir):
-                    if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        path = os.path.join(class_dir, fname)
-                        self.samples.append((path, self.class_to_idx[class_name]))
+                # Check if class_dir exists, if not, check if root IS the class dir (flat structure)
+                if os.path.exists(class_dir) and os.path.isdir(class_dir):
+                    for fname in os.listdir(class_dir):
+                        if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            path = os.path.join(class_dir, fname)
+                            self.samples.append((path, self.class_to_idx[class_name]))
+                elif os.path.basename(root) == class_name: 
+                     # The root folder IS the class folder (e.g. data/masked/train/cat)
+                     for fname in os.listdir(root):
+                        if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            path = os.path.join(root, fname)
+                            self.samples.append((path, self.class_to_idx[class_name]))
+                else: 
+                     # Maybe the user provided a path to a folder that contains images, and told us the class via config
+                     # This handles the case where data_config['custom_path'] = '.../cat' and classes=['cat']
+                     # We scan the root for images and assign them to the class if it's the only one or matches.
+                     if len(classes) == 1 and classes[0] == class_name:
+                         if os.path.exists(root) and os.path.isdir(root):
+                             for fname in os.listdir(root):
+                                if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                    path = os.path.join(root, fname)
+                                    self.samples.append((path, self.class_to_idx[class_name]))
+
         else:
             # Auto-discover classes
+            # Check if there are subdirectories
             class_dirs = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
             class_dirs.sort()
-            self.class_to_idx = {c: i for i, c in enumerate(class_dirs)}
-            self.classes = class_dirs
             
-            for class_name in class_dirs:
-                class_dir = os.path.join(root, class_name)
-                for fname in os.listdir(class_dir):
-                    if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        path = os.path.join(class_dir, fname)
-                        self.samples.append((path, self.class_to_idx[class_name]))
+            if not class_dirs:
+                # No subdirectories? Maybe it's a flat folder of images.
+                # In this case, we treat the folder name as the class
+                class_name = os.path.basename(root)
+                self.classes = [class_name]
+                self.class_to_idx = {class_name: 0}
+                for fname in os.listdir(root):
+                     if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        path = os.path.join(root, fname)
+                        self.samples.append((path, 0))
+            else:
+                self.class_to_idx = {c: i for i, c in enumerate(class_dirs)}
+                self.classes = class_dirs
+                
+                for class_name in class_dirs:
+                    class_dir = os.path.join(root, class_name)
+                    for fname in os.listdir(class_dir):
+                        if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            path = os.path.join(class_dir, fname)
+                            self.samples.append((path, self.class_to_idx[class_name]))
         
         print(f"Found {len(self.samples)} images across {len(self.class_to_idx)} classes")
         for class_name in self.class_to_idx:

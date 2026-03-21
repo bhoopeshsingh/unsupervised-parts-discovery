@@ -31,3 +31,11 @@ tqdm>=4.65.0
 # Development
 pytest>=7.4.0
 black>=23.0.0
+
+# -----------------------------------------------------------------------------
+# DINO Pipeline additions
+# -----------------------------------------------------------------------------
+ipywidgets>=8.0.0
+
+# Background removal (used by prepare_data.py)
+rembg>=2.0.50

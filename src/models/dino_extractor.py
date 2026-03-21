@@ -1,0 +1,157 @@
+# src/models/dino_extractor.py
+"""
+DINO ViT-based patch feature extractor for concept-grounded parts discovery.
+Extracts patch-level features: shape [784, 384] per 224x224 image.
+784 = 28x28 spatial grid of 8x8 patches. 384 = embedding dimension for ViT-S.
+"""
+import warnings
+
+import torch
+import torch.nn.functional as F
+import torchvision.transforms as T
+from PIL import Image
+from pathlib import Path
+
+warnings.filterwarnings("ignore")
+
+
+class DinoExtractor:
+    """
+    Wraps a frozen DINO ViT-S/8 model.
+    Extracts patch-level features: shape [784, 384] per 224x224 image (single-layer),
+    or [784, 1152] when use_multilayer=True (layers 8, 10, 12 concatenated).
+
+    Multi-layer reasoning:
+      Layer  8 → local texture: stripe patterns, fur type, edge detail
+      Layer 10 → mid-level structure: part boundaries, shape outlines
+      Layer 12 → high-level semantics: what body part, object identity
+
+    Concatenating all three gives each patch a richer description that lets GMM
+    separate e.g. tabby fur vs smooth fur (differ in layer 8) even though both
+    look the same semantically (layer 12).
+    """
+
+    MEAN = [0.485, 0.456, 0.406]
+    STD = [0.229, 0.224, 0.225]
+
+    # Indices into get_intermediate_layers(n=5) output → picks blocks 7,9,11 (layers 8,10,12)
+    _MULTILAYER_INDICES = (0, 2, 4)
+
+    def __init__(
+        self,
+        model_name: str = "dino_vits8",
+        device: str = "mps",
+        image_size: int = 224,
+        use_multilayer: bool = False,
+    ):
+        self.device = torch.device(device)
+        self.image_size = image_size
+        self.patch_size = 8
+        self.grid_size = image_size // self.patch_size  # 28
+        self.use_multilayer = use_multilayer
+        self.feat_dim = 384 * len(self._MULTILAYER_INDICES) if use_multilayer else 384
+
+        print(f"Loading {model_name} ...")
+        self.model = torch.hub.load(
+            "facebookresearch/dino:main", model_name, pretrained=True
+        )
+        self.model.eval()
+        self.model.to(self.device)
+        for p in self.model.parameters():
+            p.requires_grad = False
+        print("DINO loaded and frozen.")
+
+        self.transform = T.Compose([
+            T.Resize(256),
+            T.CenterCrop(self.image_size),
+            T.ToTensor(),
+            T.Normalize(self.MEAN, self.STD),
+        ])
+
+    def load_image(self, path) -> torch.Tensor:
+        """Load and transform a single image to tensor [1, 3, H, W]."""
+        img = Image.open(path).convert("RGB")
+        return self.transform(img).unsqueeze(0).to(self.device)
+
+    @torch.no_grad()
+    def extract_patches(self, image_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            image_tensor [B, 3, 224, 224]
+        Returns:
+            patch_features [B, 784, feat_dim]
+            feat_dim = 384  (single-layer) or 1152 (multilayer: layers 8,10,12)
+        """
+        if self.use_multilayer:
+            # get_intermediate_layers(n=5) returns last 5 blocks:
+            #   index 0 → block 7  (layer  8)
+            #   index 2 → block 9  (layer 10)
+            #   index 4 → block 11 (layer 12)
+            all_layers = self.model.get_intermediate_layers(image_tensor, n=5)
+            feats = torch.cat(
+                [all_layers[i][:, 1:, :] for i in self._MULTILAYER_INDICES], dim=-1
+            )  # [B, 784, 1152]
+        else:
+            feats = self.model.get_intermediate_layers(image_tensor, n=1)[0]
+            feats = feats[:, 1:, :]  # [B, 784, 384]
+        return feats
+
+    @torch.no_grad()
+    def extract_attention(self, image_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Returns attention maps from last layer heads.
+        Shape: [B, num_heads, 785, 785]
+        Useful for visualisation and validation.
+        """
+        return self.model.get_last_selfattention(image_tensor)
+
+    def extract_from_path(self, image_path) -> torch.Tensor:
+        """Convenience: load image from disk and extract patches."""
+        tensor = self.load_image(image_path)
+        return self.extract_patches(tensor).squeeze(0).cpu()  # [784, 384]
+
+    def extract_foreground_patches(
+        self, image_path, fg_threshold: float = 0.5
+    ) -> torch.Tensor:
+        """
+        Load image, extract patches, then mask to foreground using DINO attention.
+        Matches the foreground masking applied during batch feature extraction.
+
+        Args:
+            image_path: path to image file
+            fg_threshold: quantile threshold — keep patches with attention > this quantile.
+                          0.5 = keep top 50% (matches extract_features.py default).
+        Returns:
+            foreground patch features [K, 384] where K <= 784
+        """
+        tensor = self.load_image(image_path)
+        feats = self.extract_patches(tensor).squeeze(0).cpu()   # [784, 384]
+        attn = self.extract_attention(tensor)                    # [1, heads, 785, 785]
+        cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()         # [784] mean across heads
+        threshold = cls_attn.quantile(fg_threshold)
+        fg_indices = (cls_attn > threshold).nonzero(as_tuple=True)[0]
+        if len(fg_indices) < 10:
+            fg_indices = cls_attn.topk(max(10, feats.shape[0] // 4)).indices
+        return feats[fg_indices]                                 # [K, 384]
+
+    def extract_all_patches_with_fg_mask(
+        self, image_path, fg_threshold: float = 0.5
+    ) -> tuple:
+        """
+        Extract all 784 patch features plus a foreground mask.
+
+        Returns:
+            features [784, 384]  — all patch features (for spatial mapping)
+            fg_mask  [784] bool  — True where patch is foreground (by CLS attention)
+        """
+        tensor = self.load_image(image_path)
+        feats = self.extract_patches(tensor).squeeze(0).cpu()    # [784, 384]
+        attn = self.extract_attention(tensor)                     # [1, heads, 785, 785]
+        cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()          # [784]
+        threshold = cls_attn.quantile(fg_threshold)
+        fg_mask = cls_attn > threshold                            # [784] bool
+        return feats, fg_mask
+
+    def get_spatial_grid(self):
+        """Returns (grid_size, grid_size) = (28, 28)."""
+        return self.grid_size, self.grid_size
