@@ -24,6 +24,33 @@ import torch.nn.functional as F
 import cv2
 
 
+def compute_cluster_class_distribution(data, labels_arr, n_clusters):
+    """
+    For each cluster, compute fraction of patches from each class (bird/car/cat).
+    Returns dict: {cluster_id: {'bird': 0.3, 'car': 0.5, 'cat': 0.2, 'dominant': 'car'}}
+    """
+    from collections import Counter
+    class_names  = data['class_names']          # e.g. ['bird', 'car', 'cat']
+    image_labels = data['image_labels']          # per-image class index, list[N_images]
+    image_ids    = data['image_ids'].numpy()     # per-patch image index [N_patches]
+
+    # Build per-patch class string
+    patch_classes = [class_names[image_labels[iid]] for iid in image_ids]
+
+    dist = {}
+    for cid in range(n_clusters):
+        mask    = (labels_arr == cid)
+        indices = np.where(mask)[0]
+        counts  = Counter(patch_classes[i] for i in indices)
+        total   = sum(counts.values()) or 1
+        fracs   = {cls: counts.get(cls, 0) / total for cls in class_names}
+        dominant = max(fracs, key=fracs.get)
+        fracs['dominant'] = dominant
+        fracs['is_mixed'] = fracs[dominant] < 0.70   # mixed if no class > 70%
+        dist[cid] = fracs
+    return dist
+
+
 def load_data(config_path='configs/config.yaml'):
     """Load cached data."""
     cfg  = yaml.safe_load(open(config_path))
@@ -31,15 +58,16 @@ def load_data(config_path='configs/config.yaml'):
     cluster_labels_path = cfg['dino'].get('cluster_labels_path', 'cache/cluster_labels.pt')
     labels_arr = torch.load(cluster_labels_path, weights_only=True).numpy()
     n_clusters = cfg['clustering']['n_clusters']
-    
+
     # Load cluster centers (works for both KMeans and GaussianMixture)
     clusterer_path = cfg['dino'].get('clusterer_path', 'cache/kmeans.pkl')
     with open(clusterer_path, 'rb') as f:
         kmeans = pickle.load(f)
     centers_np = getattr(kmeans, 'cluster_centers_', None) or kmeans.means_
     cluster_centers = torch.tensor(centers_np, dtype=torch.float32)
-    
-    return data, labels_arr, n_clusters, cfg, cluster_centers
+
+    class_dist = compute_cluster_class_distribution(data, labels_arr, n_clusters)
+    return data, labels_arr, n_clusters, cfg, cluster_centers, class_dist
 
 
 def analyze_cluster_foreground_likelihood(cluster_centers, labels_arr):
@@ -231,10 +259,19 @@ def load_dino_extractor(model_name: str, device: str, image_size: int,
 
 @st.cache_resource(show_spinner="Loading classifier…")
 def load_classifier_and_vectors(classifier_path: str, vectors_path: str):
-    from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
-    clf = CatConceptOneClassClassifier.load(classifier_path)
+    import pickle
+    with open(classifier_path, "rb") as f:
+        payload = pickle.load(f)
+    # New format: dict with keys clf, class_names, concept_names, …
+    if isinstance(payload, dict):
+        clf        = payload["clf"]
+        class_names = payload["class_names"]
+    else:
+        # Legacy one-class wrapper — still works for backwards compat
+        clf        = payload
+        class_names = ["cat"]
     saved = torch.load(vectors_path, weights_only=False)
-    return clf, saved["vectors"]
+    return clf, saved["vectors"], class_names
 
 
 def run_classify_tab(cfg):
@@ -283,7 +320,7 @@ def run_classify_tab(cfg):
         cfg["dino"]["image_size"],
         cfg["dino"].get("use_multilayer", False),
     )
-    clf, vectors = load_classifier_and_vectors(clf_path, vec_path)
+    clf, vectors, class_names = load_classifier_and_vectors(clf_path, vec_path)
 
     # Show upload preview
     pil_img = Image.open(uploaded).convert("RGB")
@@ -339,17 +376,27 @@ def run_classify_tab(cfg):
         # Build score_vec in the exact order/shape the scaler expects.
         # Concepts missing from current scoring default to 0.0.
         score_vec = np.array([[concept_scores_dict.get(c, 0.0) for c in clf_concept_names]])
-        preds, _, confs = clf.predict(score_vec)
-        explanation = clf.explain(score_vec, clf_concept_names)
+
+        # 3-class logistic regression
+        pred_idx   = clf.predict(score_vec)[0]
+        pred_proba = clf.predict_proba(score_vec)[0]       # [n_classes]
+        pred_label = class_names[pred_idx]
+        confidence = float(pred_proba[pred_idx])
+
+        # Contributions = logistic regression coefficients × score (per concept)
+        coef_row = clf.coef_[pred_idx]                     # [n_concepts]
+        mean_score = score_vec[0].mean()
+        contributions = {
+            c: float(coef_row[i] * (score_vec[0][i] - mean_score))
+            for i, c in enumerate(clf_concept_names)
+        }
 
         result = {
-            "prediction": preds[0],
-            "confidence": float(confs[0]),
-            # Scores and contributions keyed by clf_concept_names for display table
+            "prediction": pred_label,
+            "confidence": confidence,
+            "class_proba": {cls: float(p) for cls, p in zip(class_names, pred_proba)},
             "concept_scores": {c: concept_scores_dict.get(c, 0.0) for c in clf_concept_names},
-            "contributions": {
-                item["concept"]: item["deviation_from_cat"] for item in explanation
-            },
+            "contributions": contributions,
         }
 
         # For spatial map: only concepts that exist in vectors can be visualised
@@ -360,18 +407,19 @@ def run_classify_tab(cfg):
         os.unlink(tmp_path)
 
     # ── prediction banner ──────────────────────────────────────
-    pred = result["prediction"].upper()   # "CAT" or "NOT_CAT"
+    pred = result["prediction"]
     conf = result["confidence"]
-    is_cat = pred == "CAT"
-    banner_color = "#1a237e" if is_cat else "#b71c1c"
-    emoji = "🐱" if is_cat else "❓"
+    cls_colors  = {"cat": "#1a237e", "car": "#b71c1c", "bird": "#1b5e20"}
+    cls_emojis  = {"cat": "🐱", "car": "🚗", "bird": "🐦"}
+    banner_color = cls_colors.get(pred, "#37474f")
+    emoji        = cls_emojis.get(pred, "❓")
 
     st.markdown(
         f"""
         <div style="background:{banner_color};padding:14px 20px;border-radius:10px;
                     text-align:center;margin:12px 0">
             <span style="color:white;font-size:1.6rem;font-weight:700">
-                {emoji} Prediction: {pred}
+                {emoji} Prediction: {pred.upper()}
             </span>
             <span style="color:#cfd8dc;font-size:1.1rem;margin-left:16px">
                 Confidence: {conf:.1%}
@@ -380,6 +428,16 @@ def run_classify_tab(cfg):
         """,
         unsafe_allow_html=True,
     )
+
+    # Per-class probability breakdown
+    if "class_proba" in result:
+        prob_cols = st.columns(len(result["class_proba"]))
+        for i, (cls, prob) in enumerate(result["class_proba"].items()):
+            prob_cols[i].metric(
+                f"{cls_emojis.get(cls,'')} {cls.upper()}",
+                f"{prob:.1%}",
+                delta="predicted" if cls == pred else None,
+            )
 
     # ── semantic explanation figure ────────────────────────────
     st.subheader("Semantic Part Map & Concept Contributions")
@@ -399,7 +457,7 @@ def run_classify_tab(cfg):
         )
         # Render to buffer and display
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", pad_inches=0.1)
         plt.close(fig)
         buf.seek(0)
         os.unlink(tmp_path)
@@ -415,8 +473,8 @@ def run_classify_tab(cfg):
             {
                 "Concept": n.replace("_", " "),
                 "Activation": round(scores[n], 3),
-                "vs avg cat": round(contribs[n], 4),
-                "Signal": "↑ above avg" if contribs[n] >= 0 else "↓ below avg",
+                "Contribution": round(contribs[n], 4),
+                "Signal": "↑ supports" if contribs[n] >= 0 else "↓ opposes",
             }
             for n in concept_names
         ],
@@ -427,38 +485,23 @@ def run_classify_tab(cfg):
 
     # ── plain-language explanation ─────────────────────────────
     st.subheader("Plain-language explanation")
-    # Top activated concepts by raw activation score
     top_activated = [r["Concept"] for r in rows if r["Activation"] > 0.5][:3]
-    top_weak = [r["Concept"] for r in rows if r["Activation"] < 0.3][:2]
-
-    if is_cat:
-        parts = ", ".join(f"**{c}**" for c in top_activated) if top_activated else "cat-like patterns"
-        st.success(
-            f"**CAT** ({conf:.0%} confidence)\n\n"
-            f"The concept activation profile — {parts} — falls **inside** the "
-            f"learned cat distribution. The one-class classifier judges the overall "
-            f"combination of all concept activations, not each concept individually."
-        )
-    else:
-        weak = ", ".join(f"**{c}**" for c in top_weak) if top_weak else "most cat concepts"
-        st.warning(
-            f"**NOT A CAT** ({conf:.0%} confidence)\n\n"
-            f"The overall concept activation profile falls **outside** the learned "
-            f"cat distribution. Weak activations in {weak} pushed the profile away "
-            f"from the cat boundary."
-        )
-
+    parts = ", ".join(f"**{c}**" for c in top_activated) if top_activated else "dominant concept patterns"
+    st.success(
+        f"**{pred.upper()}** ({conf:.0%} confidence)\n\n"
+        f"The concept activation profile — {parts} — best matches the "
+        f"**{pred}** class. The classifier scores each image on {len(clf_concept_names)} "
+        f"named semantic concepts and picks the class whose concept profile fits best."
+    )
     with st.expander("How to read these results"):
         st.markdown(
-            "**Activation** — how strongly each semantic part (labelled by a human) "
+            "**Activation** — how strongly each semantic concept (labelled by a human) "
             "was detected in this image. Higher = stronger match to that concept.\n\n"
-            "**vs avg cat** — how this image's activation compares to the average cat "
-            "in training. ↑ above avg = stronger than typical cat; ↓ below avg = weaker.\n\n"
-            "**Important:** individual concept signals do not vote independently. "
-            "The one-class SVM evaluates the *combined* 10-concept profile and asks: "
-            "*does this pattern fall within the distribution of cat images?* "
-            "A concept can be below average and the image still be classified as cat "
-            "if the overall profile remains within the learned boundary.\n\n"
+            "**Contribution** — logistic regression coefficient × activation deviation from mean. "
+            "Positive = pushed prediction toward this class; negative = pushed away.\n\n"
+            "**Important:** the 3-class classifier (cat | car | bird) scores each image "
+            "against all named concepts and picks the class whose concept profile fits best. "
+            "A car image should activate car-related concepts strongly and cat/bird concepts weakly.\n\n"
             "**Semantic Part Map** — each 8×8 patch coloured by its closest concept. "
             "Shows *where* in the image each part was detected."
         )
@@ -470,7 +513,7 @@ def run_streamlit():
     st.title('Unsupervised Parts Discovery')
 
     # Load config + data once (shared by both tabs)
-    data, labels_arr, n_clusters, cfg, cluster_centers = load_data()
+    data, labels_arr, n_clusters, cfg, cluster_centers, class_dist = load_data()
 
     tab_label, tab_classify = st.tabs(["🏷️ Label Clusters", "🔍 Classify & Explain"])
 
@@ -539,17 +582,14 @@ def run_streamlit():
 
         # Sidebar: Clickable cluster list
         st.sidebar.header('Clusters')
+        cls_emoji = {'bird': '🟦', 'car': '🟥', 'cat': '🟩'}
         for cid in range(n_clusters):
             size = int((labels_arr == cid).sum())
-            fg_score = fg_scores[cid]
             clabel = existing.get(str(cid), {}).get('label', '—')
-            if fg_score > 0.5:
-                emoji = "🐱"
-            elif fg_score > 0.4:
-                emoji = "❓"
-            else:
-                emoji = "🌫️"
-            btn_label = f'{emoji} C{cid}: {clabel[:12]} ({size//1000}k)'
+            dom = class_dist[cid]['dominant']
+            mixed_flag = '⚠️' if class_dist[cid]['is_mixed'] else ''
+            emoji = cls_emoji.get(dom, '⬜')
+            btn_label = f'{emoji}{mixed_flag} C{cid}: {clabel[:12]} ({size//1000}k)'
             is_selected = st.session_state.selected_cluster == cid
             if st.sidebar.button(
                 btn_label,
@@ -626,17 +666,43 @@ def run_streamlit():
 
         st.divider()
 
-        # Labeling form
+        # ── Class distribution for this cluster ───────────────────────────────
+        dist = class_dist[cluster_id]
+        dominant_cls = dist['dominant']
+        class_names_list = [c for c in data['class_names']]
+
         st.subheader(f'Label Cluster {cluster_id}')
+
+        # Class breakdown bar
+        bar_cols = st.columns(len(class_names_list))
+        cls_colors = {'bird': '🟦', 'car': '🟥', 'cat': '🟩'}
+        for i, cls in enumerate(class_names_list):
+            pct = dist.get(cls, 0)
+            bar_cols[i].metric(
+                f"{cls_colors.get(cls,'⬜')} {cls.upper()}",
+                f"{pct:.0%}",
+                delta="dominant" if cls == dominant_cls else None,
+            )
+
+        if dist['is_mixed']:
+            st.warning(f'⚠️ Mixed cluster — no single class dominates (>{70:.0f}%). Label with caution or mark as background.')
+        else:
+            st.info(f'✅ Dominant class: **{dominant_cls.upper()}** ({dist[dominant_cls]:.0%} of patches) — label as `{dominant_cls}: <part name>`')
+
         current = existing.get(str(cluster_id), {})
+
+        # Auto-suggest label prefix from dominant class if no existing label
+        default_label = current.get('label', '')
+        if not default_label and not dist['is_mixed']:
+            default_label = f'{dominant_cls}: '
 
         col1, col2 = st.columns([2, 1])
 
         with col1:
             label = st.text_input(
-                'Semantic label',
-                value=current.get('label', ''),
-                placeholder='e.g. eyes, ears, body, background',
+                'Semantic label  (format: class: part — e.g. "cat: nose", "car: windshield")',
+                value=default_label,
+                placeholder='e.g. cat: nose, car: windshield, bird: wing',
                 key=f'label_{cluster_id}'
             )
             notes = st.text_area(

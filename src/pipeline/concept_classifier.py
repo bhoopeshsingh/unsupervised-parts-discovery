@@ -287,40 +287,35 @@ def render_dissertation_explanation(
     ]
 
     # ---- layout ---------------------------------------------------------------
-    fig = plt.figure(figsize=(16, 6))
-    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 1.1], wspace=0.35)
+    # Two-row GridSpec: row 0 = panels, row 1 = dedicated legend axes.
+    # This guarantees the legend can never overlap the image panels.
+    ncol_legend  = min(6, max(3, n_concepts // 2))
+    n_legend_rows = max(1, (n_concepts + ncol_legend - 1) // ncol_legend)
+    legend_row_h  = 0.6 + 0.35 * n_legend_rows   # inches per row
+    panel_h       = 6.0                            # inches for image panels
+    fig = plt.figure(figsize=(16, panel_h + legend_row_h))
+    gs = gridspec.GridSpec(
+        2, 3,
+        height_ratios=[panel_h, legend_row_h],
+        width_ratios=[1, 1, 1.1],
+        wspace=0.35,
+        hspace=0.15,
+    )
 
     # Panel 1 — original
-    ax0 = fig.add_subplot(gs[0])
+    ax0 = fig.add_subplot(gs[0, 0])
     ax0.imshow(img)
     ax0.set_title("Input Image", fontsize=12, fontweight="bold")
     ax0.axis("off")
 
     # Panel 2 — semantic overlay
-    ax1 = fig.add_subplot(gs[1])
+    ax1 = fig.add_subplot(gs[0, 1])
     ax1.imshow(blended)
     ax1.set_title("Semantic Part Map", fontsize=12, fontweight="bold")
     ax1.axis("off")
-    legend_patches = [
-        mpatches.Patch(
-            facecolor=concept_colors[n],
-            edgecolor="white",
-            label=n.replace("_", " "),
-        )
-        for n in concept_names
-    ]
-    ax1.legend(
-        handles=legend_patches,
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.28),
-        ncol=2,
-        fontsize=7.5,
-        frameon=True,
-        framealpha=0.9,
-    )
 
     # Panel 3 — bar chart
-    ax2 = fig.add_subplot(gs[2])
+    ax2 = fig.add_subplot(gs[1, 0])
     y_pos = np.arange(len(sorted_names))
     bars = ax2.barh(y_pos, bar_values, color=bar_colors, edgecolor="white", height=0.65)
     for i, (bar, score) in enumerate(zip(bars, bar_scores)):
@@ -346,17 +341,59 @@ def render_dissertation_explanation(
         color="#1a237e" if pred == "CAT" else "#b71c1c",
     )
 
-    # top concept summary below title
-    top3 = [n.replace("_", " ") for n in sorted_names[:3] if bar_scores[concept_names.index(n) if n in concept_names else 0] > 0.3]
-    if top3:
-        fig.text(
-            0.98, 0.02,
-            "Evidence: " + ", ".join(top3),
-            ha="right", va="bottom", fontsize=8.5, color="#555",
-            style="italic",
-        )
+    # ---- concept colour legend — grouped by class, placed BELOW all panels ----
+    cls_order   = ["cat", "car", "bird"]
+    cls_colors_map = {"cat": "#1a237e", "car": "#b71c1c", "bird": "#1b5e20"}
+    cls_emojis  = {"cat": "🐱 Cat", "car": "🚗 Car", "bird": "🐦 Bird"}
 
-    plt.tight_layout()
+    # Group concept names by the prefix (e.g. "cat: nose" → "cat")
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for name in concept_names:
+        prefix = name.split(":")[0].strip().lower() if ":" in name else "other"
+        grouped[prefix].append(name)
+
+    all_handles, all_labels = [], []
+    for cls in cls_order:
+        if cls not in grouped:
+            continue
+        # Section header patch (invisible, just for the label)
+        header = mpatches.Patch(
+            facecolor=cls_colors_map.get(cls, "#444"),
+            edgecolor="none",
+            label=f"── {cls_emojis.get(cls, cls.upper())} ──",
+            alpha=0.0,
+        )
+        all_handles.append(header)
+        all_labels.append(f"── {cls_emojis.get(cls, cls.upper())} ──")
+        for name in grouped[cls]:
+            p = mpatches.Patch(
+                facecolor=concept_colors[name],
+                edgecolor="white",
+                linewidth=0.5,
+                label=name.split(":", 1)[-1].strip().replace("_", " "),
+            )
+            all_handles.append(p)
+            all_labels.append(name.split(":", 1)[-1].strip().replace("_", " "))
+
+    # Dedicated legend axes spanning the full bottom row — guaranteed no overlap
+    ax_leg = fig.add_subplot(gs[2, :])
+    ax_leg.axis("off")
+    ax_leg.legend(
+        handles=all_handles,
+        labels=all_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.0),
+        ncol=ncol_legend,
+        fontsize=8,
+        frameon=True,
+        framealpha=0.92,
+        title="Concept Colour Key",
+        title_fontsize=9,
+        borderpad=0.8,
+        handlelength=1.2,
+    )
+
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
         print(f"Dissertation figure saved → {save_path}")
