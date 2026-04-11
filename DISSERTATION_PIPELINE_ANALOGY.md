@@ -353,7 +353,7 @@ Final classifier    LogReg [N, 30] → 3 classes  LogReg [N, 30] → 3 condition
 | Labeling GUI | `labeling/label_tool.py` | `labeling/lab_label_tool.py` |
 | Config | `configs/config.yaml` | `configs/config_lab.yaml` |
 
----
+---------------------------------------------------------------------------------------|
 
 ## Grounding in Literature (Gap → Our Answer)
 

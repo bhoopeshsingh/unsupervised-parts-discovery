@@ -210,9 +210,22 @@ def stage_pretrain(cfg):
 
     data = torch.load(features_path, weights_only=False)
     features = data["features"]                      # [N, 34] clinical deviation tensor
+    saved_feature_cols = data["feature_cols"]        # original fixed order from stage_extract
 
-    panel_ids, feature_cols, panel_names = build_panel_ids(CONFIG)
     tcfg = cfg["transformer"]
+    panel_ids, feature_cols, panel_names = build_panel_ids(
+        CONFIG,
+        shuffle_panels=tcfg.get("shuffle_panels", False),
+        random_seed=tcfg.get("shuffle_panels_seed", None),
+    )
+
+    # Reorder tensor columns to match the (possibly shuffled) feature_cols so
+    # panel_ids[i] correctly describes the feature at position i in the tensor.
+    if feature_cols != saved_feature_cols:
+        col_idx = [saved_feature_cols.index(c) for c in feature_cols]
+        features = features[:, col_idx]
+        print(f"  Panel order shuffled — tensor columns reindexed to match.")
+
     pcfg = tcfg["pretrain"]
 
     print(f"  Panels : {panel_names}")
@@ -289,8 +302,18 @@ def stage_encode(cfg):
     data = torch.load(features_path, weights_only=False)
     features = data["features"]                      # [N, 34]
     record_ids = data["record_ids"]
+    saved_feature_cols = data["feature_cols"]
 
-    panel_ids, feature_cols, panel_names = build_panel_ids(CONFIG)
+    panel_ids, feature_cols, panel_names = build_panel_ids(
+        CONFIG,
+        shuffle_panels=cfg["transformer"].get("shuffle_panels", False),
+        random_seed=cfg["transformer"].get("shuffle_panels_seed", None),
+    )
+
+    if feature_cols != saved_feature_cols:
+        col_idx = [saved_feature_cols.index(c) for c in feature_cols]
+        features = features[:, col_idx]
+
     n_panels = len(panel_names)
     device = cfg["transformer"]["pretrain"]["device"]
 
@@ -698,15 +721,19 @@ def stage_classify(cfg):
     print(classification_report(y_te, clf.predict(X_te), target_names=class_names))
 
     # ── Save — same dict format as image pipeline ─────────────────────────
+    report_dict = classification_report(
+        y_te, clf.predict(X_te), target_names=class_names, output_dict=True
+    )
     payload = {
-        "clf":            clf,
-        "class_names":    class_names,
-        "concept_names":  concept_names,
-        "test_accuracy":  test_acc,
-        "train_accuracy": train_acc,
+        "clf":              clf,
+        "class_names":      class_names,
+        "concept_names":    concept_names,
+        "test_accuracy":    test_acc,
+        "train_accuracy":   train_acc,
+        "classification_report": report_dict,
         # Metadata about what these labels represent — for dissertation write-up
-        "label_source":   "NHANES questionnaire (DIQ010, BPQ020) — never used in training",
-        "core_claim":     "Unsupervised concept scores predict physician-confirmed diagnoses",
+        "label_source":     "NHANES questionnaire (DIQ010, BPQ020) — never used in training",
+        "core_claim":       "Unsupervised concept scores predict physician-confirmed diagnoses",
     }
 
     classifier_path = cfg["classification"]["classifier_path"]

@@ -1,0 +1,51 @@
+{
+  "A": {
+    "silhouette": 0.0521,
+    "class_purity": 0.8914,
+    "nmi": 0.326,
+    "intra_mean": 0.8315,
+    "inter_mean": 0.8332,
+    "intra_inter_ratio": 0.9979,
+    "n_patches": 2352000,
+    "n_clusters": 30,
+    "variant_name": "Full (multi-layer + FG mask + fine-tuned)",
+    "paper_gap": "Baseline \u2014 all contributions active"
+  },
+  "B": {
+    "silhouette": 0.0297,
+    "class_purity": 0.8757,
+    "nmi": 0.2977,
+    "intra_mean": 0.8053,
+    "inter_mean": 0.8618,
+    "intra_inter_ratio": 0.9345,
+    "n_patches": 2352000,
+    "n_clusters": 30,
+    "variant_name": "Single-layer (L12 only)",
+    "paper_gap": "DINO (Caron 2021): intermediate layers not analyzed"
+  },
+  "C": {
+    "silhouette": 0.0347,
+    "class_purity": 0.8634,
+    "nmi": 0.2669,
+    "intra_mean": 0.8489,
+    "inter_mean": 0.7964,
+    "intra_inter_ratio": 1.0659,
+    "n_patches": 2400000,
+    "n_clusters": 30,
+    "variant_name": "No FG masking (all patches, subsampled to 2.4M)",
+    "paper_gap": "ACE (Ghassemi 2019): relies on segmentation preprocessing",
+    "note": "Subsampled 2,400,000 of 9,408,000 total patches (memory constraint)"
+  },
+  "D": {
+    "silhouette": 0.045,
+    "class_purity": 0.935,
+    "nmi": 0.3633,
+    "intra_mean": 0.8724,
+    "inter_mean": 0.7638,
+    "intra_inter_ratio": 1.1423,
+    "n_patches": 2352000,
+    "n_clusters": 30,
+    "variant_name": "Pre-finetune DINO (base weights)",
+    "paper_gap": "Domain-informed fine-tuning effect on cluster quality"
+  }
+}

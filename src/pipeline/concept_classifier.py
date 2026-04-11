@@ -244,9 +244,30 @@ def render_dissertation_explanation(
     import matplotlib.patches as mpatches
     import matplotlib.gridspec as gridspec
 
-    n_concepts = len(concept_names)
-    cmap = plt.cm.get_cmap("tab10", n_concepts)
-    concept_colors = {name: cmap(i)[:3] for i, name in enumerate(concept_names)}
+    # Assign grey to concepts with zero/negligible activation; give active
+    # concepts distinct colours from a 20-colour qualitative palette so no
+    # two active concepts share the same hue.
+    INACTIVE_GREY = (0.72, 0.72, 0.72)          # light grey
+    ACTIVE_PALETTE = [                           # 20 perceptually distinct colours
+        "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
+        "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
+        "#dcbeff", "#9A6324", "#fffac8", "#800000", "#aaffc3",
+        "#808000", "#ffd8b1", "#000075", "#a9a9a9", "#000000",
+    ]
+
+    scores = result["concept_scores"]
+    ACTIVE_THRESHOLD = 0.05                      # scores below this → grey
+
+    active_concepts = [n for n in concept_names if scores.get(n, 0) > ACTIVE_THRESHOLD]
+    colour_iter = iter(ACTIVE_PALETTE)
+    concept_colors: dict = {}
+    for name in concept_names:
+        if name in active_concepts:
+            hex_col = next(colour_iter, "#555555")   # fallback if >20 active
+            r, g, b = int(hex_col[1:3], 16), int(hex_col[3:5], 16), int(hex_col[5:7], 16)
+            concept_colors[name] = (r / 255, g / 255, b / 255)
+        else:
+            concept_colors[name] = INACTIVE_GREY
 
     # ---- load & resize image --------------------------------------------------
     img = np.array(PILImage.open(image_path).convert("RGB").resize((224, 224)))
@@ -271,13 +292,12 @@ def render_dissertation_explanation(
         fg_224 = np.array(
             PILImage.fromarray(fg_28 * 255).resize((224, 224), PILImage.NEAREST)
         ) / 255.0
-        alpha = 0.25 + 0.55 * fg_224   # background=0.25, foreground=0.80
+        alpha = 0.80 * fg_224   # background=0 (no overlay), foreground=0.80
 
     blended = (img / 255.0) * (1 - alpha[:, :, None]) + overlay * alpha[:, :, None]
     blended = np.clip(blended, 0, 1)
 
     # ---- bar chart data -------------------------------------------------------
-    scores = result["concept_scores"]
     contribs = result["contributions"]
     sorted_names = sorted(concept_names, key=lambda c: abs(contribs[c]), reverse=True)
     bar_values = [contribs[n] for n in sorted_names]
@@ -287,19 +307,12 @@ def render_dissertation_explanation(
     ]
 
     # ---- layout ---------------------------------------------------------------
-    # Two-row GridSpec: row 0 = panels, row 1 = dedicated legend axes.
-    # This guarantees the legend can never overlap the image panels.
-    ncol_legend  = min(6, max(3, n_concepts // 2))
-    n_legend_rows = max(1, (n_concepts + ncol_legend - 1) // ncol_legend)
-    legend_row_h  = 0.6 + 0.35 * n_legend_rows   # inches per row
-    panel_h       = 6.0                            # inches for image panels
-    fig = plt.figure(figsize=(16, panel_h + legend_row_h))
+    # Single-row GridSpec: 3 panels side by side.
+    fig = plt.figure(figsize=(18, 6))
     gs = gridspec.GridSpec(
-        2, 3,
-        height_ratios=[panel_h, legend_row_h],
-        width_ratios=[1, 1, 1.1],
+        1, 3,
+        width_ratios=[1, 1, 1.4],
         wspace=0.35,
-        hspace=0.15,
     )
 
     # Panel 1 — original
@@ -315,7 +328,7 @@ def render_dissertation_explanation(
     ax1.axis("off")
 
     # Panel 3 — bar chart
-    ax2 = fig.add_subplot(gs[1, 0])
+    ax2 = fig.add_subplot(gs[0, 2])
     y_pos = np.arange(len(sorted_names))
     bars = ax2.barh(y_pos, bar_values, color=bar_colors, edgecolor="white", height=0.65)
     for i, (bar, score) in enumerate(zip(bars, bar_scores)):
@@ -339,59 +352,6 @@ def render_dissertation_explanation(
         fontsize=12,
         fontweight="bold",
         color="#1a237e" if pred == "CAT" else "#b71c1c",
-    )
-
-    # ---- concept colour legend — grouped by class, placed BELOW all panels ----
-    cls_order   = ["cat", "car", "bird"]
-    cls_colors_map = {"cat": "#1a237e", "car": "#b71c1c", "bird": "#1b5e20"}
-    cls_emojis  = {"cat": "🐱 Cat", "car": "🚗 Car", "bird": "🐦 Bird"}
-
-    # Group concept names by the prefix (e.g. "cat: nose" → "cat")
-    from collections import defaultdict
-    grouped = defaultdict(list)
-    for name in concept_names:
-        prefix = name.split(":")[0].strip().lower() if ":" in name else "other"
-        grouped[prefix].append(name)
-
-    all_handles, all_labels = [], []
-    for cls in cls_order:
-        if cls not in grouped:
-            continue
-        # Section header patch (invisible, just for the label)
-        header = mpatches.Patch(
-            facecolor=cls_colors_map.get(cls, "#444"),
-            edgecolor="none",
-            label=f"── {cls_emojis.get(cls, cls.upper())} ──",
-            alpha=0.0,
-        )
-        all_handles.append(header)
-        all_labels.append(f"── {cls_emojis.get(cls, cls.upper())} ──")
-        for name in grouped[cls]:
-            p = mpatches.Patch(
-                facecolor=concept_colors[name],
-                edgecolor="white",
-                linewidth=0.5,
-                label=name.split(":", 1)[-1].strip().replace("_", " "),
-            )
-            all_handles.append(p)
-            all_labels.append(name.split(":", 1)[-1].strip().replace("_", " "))
-
-    # Dedicated legend axes spanning the full bottom row — guaranteed no overlap
-    ax_leg = fig.add_subplot(gs[2, :])
-    ax_leg.axis("off")
-    ax_leg.legend(
-        handles=all_handles,
-        labels=all_labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.0),
-        ncol=ncol_legend,
-        fontsize=8,
-        frameon=True,
-        framealpha=0.92,
-        title="Concept Colour Key",
-        title_fontsize=9,
-        borderpad=0.8,
-        handlelength=1.2,
     )
 
     if save_path:

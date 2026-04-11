@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1"
+  tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1"
+  pageWidth="1180" pageHeight="785" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="2" value="Unsupervised Concept Discovery &amp; Post-Hoc Semantic Grounding  (Pillars 1 &amp; 3)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="10" y="10" width="1160" height="38" as="geometry" /></mxCell>
+    <mxCell id="3" value="Clustering is identical across domains  ·  Labeling mechanism differs  ·  No concept labels required at training time" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="10" y="50" width="1160" height="22" as="geometry" /></mxCell>
+    <mxCell id="4" value="IMAGE DOMAIN" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#ffffff;strokeColor=#1565C0;fontStyle=1;fontSize=12;align=center;" vertex="1" parent="1"><mxGeometry x="10" y="78" width="560" height="30" as="geometry" /></mxCell>
+    <mxCell id="5" value="LAB DOMAIN" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#ffffff;strokeColor=#2E7D32;fontStyle=1;fontSize=12;align=center;" vertex="1" parent="1"><mxGeometry x="600" y="78" width="560" height="30" as="geometry" /></mxCell>
+    <mxCell id="6" value="Feature Input
+DINO patch features  [N_patches × 1,152-dim]
+(after FG masking — ~300 patches per image)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="20" y="118" width="540" height="60" as="geometry" /></mxCell>
+    <mxCell id="7" value="PCA Dimensionality Reduction
+1,152-dim  →  128-dim  (retains ≈90% variance)
+Spatial coordinates (row/col) appended" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="20" y="188" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="8" value="Gaussian Mixture Model  (GMM)
+30 clusters  ·  full covariance
+Soft cluster assignments → hard labels
+Spatial smoothing: majority-vote per patch neighbourhood" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="20" y="253" width="540" height="70" as="geometry" /></mxCell>
+    <mxCell id="9" value="Cluster Visualisation
+For each cluster: display representative patch grids
+Color-overlay on original image
+Streamlit UI  (labeling/image_cluster_labeler.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="20" y="333" width="540" height="65" as="geometry" /></mxCell>
+    <mxCell id="10" value="Human SME Labeling
+Domain expert views patch grids
+→ assigns semantic name per cluster
+e.g.  cluster 4 → &quot;cat_ear&quot;
+       cluster 9 → &quot;wheel_rim&quot;
+       cluster 17 → &quot;wing_feather&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="20" y="408" width="540" height="80" as="geometry" /></mxCell>
+    <mxCell id="11" value="labels.json
+{&quot;4&quot;: &quot;cat_ear&quot;,  &quot;9&quot;: &quot;wheel_rim&quot;,  ...}
+Unlabeled clusters ignored in downstream steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="20" y="498" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="12" value="Concept Vectors
+Mean DINO feature of all patches in labeled cluster
+One 384-dim vector per named concept" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="20" y="563" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="13" value="Concept Activation Scores
+score[image, concept] = fraction of image patches
+assigned to that concept cluster
+→ [N_images × N_labeled_concepts]  sparse matrix" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="20" y="628" width="540" height="65" as="geometry" /></mxCell>
+    <mxCell id="14" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="6" target="7" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="15" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="7" target="8" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="16" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="8" target="9" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="17" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="9" target="10" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="18" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="10" target="11" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="19" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="11" target="12" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="20" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="12" target="13" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="21" value="Feature Input
+PSFTT panel-patch features  [N_records × 3 × 384-dim]
+One 384-dim vector per clinical panel per record" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="610" y="118" width="540" height="60" as="geometry" /></mxCell>
+    <mxCell id="22" value="PCA per Panel
+384-dim  →  20-dim per panel
+Clustering done independently per panel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="610" y="188" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="23" value="Per-Panel GMM  (3 × 10 = 30 clusters total)
+CBC panel: 10 clusters
+BMP panel: 10 clusters    Lipid panel: 10 clusters
+Soft assignments → hard labels per record" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="610" y="253" width="540" height="70" as="geometry" /></mxCell>
+    <mxCell id="24" value="Cluster Deviation Profile Generation
+For each cluster: compute centroid in original lab space
+Format as signed deviation from clinical normal range
+e.g.  WBC ↑1.8σ  ·  HGB ↓2.1σ  ·  MCV ↓1.4σ
+Streamlit UI  (labeling/lab_cluster_labeler.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="610" y="333" width="540" height="75" as="geometry" /></mxCell>
+    <mxCell id="25" value="LLM Clinical Advisor
+LLM reads deviation profile
+→ suggests clinical concept label
+→ lists differential diagnoses
+e.g.  &quot;CBC pattern consistent with iron-deficiency anaemia&quot;
+       differentials: [thalassaemia, chronic disease anaemia]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="610" y="418" width="540" height="80" as="geometry" /></mxCell>
+    <mxCell id="26" value="Human Clinician Validation
+Clinic expert reviews LLM suggestion
+→ accepts / corrects label
+→ records confidence score
+Stored in  cache/lab/labels.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="610" y="508" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="27" value="Clinical Concept Vectors
+Mean PSFTT panel-patch for labeled cluster
+One vector per named clinical concept per panel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="610" y="573" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="28" value="Concept Activation Scores
+score[record, concept] = cluster membership (0 or 1)
+→ [N_records × N_labeled_concepts]
+Validated: diabetic records enriched in 'hyperglycaemia' concept" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=9;align=center;" vertex="1" parent="1"><mxGeometry x="610" y="638" width="540" height="55" as="geometry" /></mxCell>
+    <mxCell id="29" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="21" target="22" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="30" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="22" target="23" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="31" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="23" target="24" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="32" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="24" target="25" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="33" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="25" target="26" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="34" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="26" target="27" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="35" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="27" target="28" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="36" value="Both domains use identical PatchClusterer class
+GMM method, PCA reduction, spatial features option
+→ code reuse validates domain-generality claim" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="210" y="715" width="760" height="45" as="geometry" /></mxCell>
+  </root>
+</mxGraphModel>

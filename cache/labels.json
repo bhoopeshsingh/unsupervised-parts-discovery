@@ -56,7 +56,7 @@
   "10": {
     "label": "cat: face",
     "include": true,
-    "confidence": 2,
+    "confidence": 3,
     "notes": ""
   },
   "11": {
@@ -120,9 +120,9 @@
     "notes": ""
   },
   "21": {
-    "label": "",
+    "label": "noise",
     "include": false,
-    "confidence": 2,
+    "confidence": 3,
     "notes": ""
   },
   "22": {
@@ -158,7 +158,7 @@
   "27": {
     "label": "cat: body_fur",
     "include": true,
-    "confidence": 2,
+    "confidence": 3,
     "notes": ""
   },
   "28": {
@@ -169,6 +169,12 @@
   },
   "29": {
     "label": "bird: leg",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "4": {
+    "label": "bird:wings",
     "include": true,
     "confidence": 3,
     "notes": ""

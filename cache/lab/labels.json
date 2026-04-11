@@ -1,0 +1,182 @@
+{
+  "cbc:0": {
+    "label": "hypercholesterolemia_pattern",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "cbc:1": {
+    "label": "hypercholesterolemia",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:2": {
+    "label": "dyslipidaemia",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:3": {
+    "label": "pre_diabetes",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:0": {
+    "label": "metabolic_syndrome",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:4": {
+    "label": "dyslipidemia",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "biochem:6": {
+    "label": "hypercholesterolemia_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:9": {
+    "label": "elevated_ldl_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "lipid:1": {
+    "label": "hypercholesterolemia_pattern",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "lipid:3": {
+    "label": "mildly_elevated_risk_cardiovascular_disease",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "lipid:7": {
+    "label": "hyperlipidemia_pattern",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "lipid:9": {
+    "label": "metabolic_syndrome",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:5": {
+    "label": "metabolic_syndrome",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "cbc:4": {
+    "label": "metabolic_syndrome",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "cbc:6": {
+    "label": "hypercholesterolemia",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:7": {
+    "label": "hyperlipidemia_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:8": {
+    "label": "dyslipidemia_profile",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "cbc:9": {
+    "label": "elevated_lipid_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:3": {
+    "label": "dyslipidaemia_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:5": {
+    "label": "postprandial_hyperglycemia",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:2": {
+    "label": "mild_metabolic_syndrome",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:1": {
+    "label": "hypercholesterolemia",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:7": {
+    "label": "pre_diabetes_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "biochem:8": {
+    "label": "hyperlipidemia_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "lipid:4": {
+    "label": "healthy_population",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "lipid:5": {
+    "label": "hyperlipidemia_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "lipid:0": {
+    "label": "metabolic_syndrome_pattern",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "lipid:2": {
+    "label": "elevated_lipidemia_with_anemia_pattern",
+    "include": true,
+    "confidence": 1,
+    "notes": ""
+  },
+  "lipid:6": {
+    "label": "mild_hyperglycemia",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "lipid:8": {
+    "label": "pre_dyslipidaemia_pattern",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  }
+}

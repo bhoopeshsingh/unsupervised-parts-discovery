@@ -1,0 +1,68 @@
+{
+  "concept_based": {
+    "accuracy": 0.9888,
+    "macro_precision": 0.9889,
+    "macro_recall": 0.9887,
+    "macro_F1": 0.9888,
+    "macro_AUC_ROC": 0.9996,
+    "per_class": {
+      "bird": {
+        "precision": 0.9937,
+        "recall": 0.985,
+        "f1": 0.9893,
+        "support": 800
+      },
+      "car": {
+        "precision": 0.9744,
+        "recall": 1.0,
+        "f1": 0.987,
+        "support": 800
+      },
+      "cat": {
+        "precision": 0.9987,
+        "recall": 0.9812,
+        "f1": 0.9899,
+        "support": 800
+      }
+    },
+    "n_concepts": 22,
+    "classifier": "LogisticRegression (C=1.0, class_weight=balanced)"
+  },
+  "raw_baseline": {
+    "accuracy": 0.4642,
+    "macro_precision": 0.5671,
+    "macro_recall": 0.4642,
+    "macro_F1": 0.4559,
+    "macro_AUC_ROC": 0.7159,
+    "per_class": {
+      "bird": {
+        "precision": 0.367,
+        "recall": 0.7362,
+        "f1": 0.4898,
+        "support": 800
+      },
+      "car": {
+        "precision": 0.7339,
+        "recall": 0.3275,
+        "f1": 0.4529,
+        "support": 800
+      },
+      "cat": {
+        "precision": 0.6005,
+        "recall": 0.3287,
+        "f1": 0.4249,
+        "support": 800
+      }
+    },
+    "features": "mean DINO L12 (last 384d) per image, PCA\u219250d",
+    "classifier": "OneClassSVM (rbf, nu=0.1, OvR)"
+  },
+  "class_names": [
+    "bird",
+    "car",
+    "cat"
+  ],
+  "n_test": 2400,
+  "split": "80/20 stratified (random_state=42)",
+  "note": "Concept-based uses 22 labeled concept scores (8 noise clusters excluded). Raw baseline uses mean FG-masked DINO L12 patch features per image."
+}

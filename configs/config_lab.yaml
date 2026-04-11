@@ -128,6 +128,11 @@ transformer:
   n_clusters_per_panel: 10         # GMM clusters per panel → 30 total concept dims
   weights_path:       cache/lab/transformer.pt
   panel_patches_path: cache/lab/panel_patches.pt
+  # Experiment: shuffle panel order before building the feature sequence.
+  # Tests whether the model relies on panel PE identity vs. fixed feature position.
+  # Change random_seed between runs to try different orderings.
+  shuffle_panels: false
+  shuffle_panels_seed: 42
   pretrain:
     n_epochs: 50
     batch_size: 256

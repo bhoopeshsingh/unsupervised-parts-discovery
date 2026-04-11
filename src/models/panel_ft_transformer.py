@@ -366,25 +366,44 @@ class PanelFTTransformer(nn.Module):
 # Helper: build panel_ids list from config
 # ---------------------------------------------------------------------------
 
-def build_panel_ids(config_path: str) -> Tuple[List[int], List[str], List[str]]:
+def build_panel_ids(
+    config_path: str,
+    shuffle_panels: bool = False,
+    random_seed: Optional[int] = None,
+) -> Tuple[List[int], List[str], List[str]]:
     """
     Read config_lab.yaml and return:
         panel_ids:    List[int]  — panel index per feature (same order as feature_cols)
         feature_cols: List[str]  — ordered feature column names
         panel_names:  List[str]  — panel name per panel index
 
-    Panel ordering matches config 'panels' dict order:
+    Default panel ordering matches config 'panels' dict order:
         0 = cbc, 1 = biochem, 2 = lipid
+
+    Args:
+        shuffle_panels:  If True, randomise the panel order before building the
+                         feature sequence.  The panel PE indices follow the shuffled
+                         order, so panel 0/1/2 are re-assigned.  Useful to verify
+                         that the model learns from panel *identity* (via PE) rather
+                         than fixed feature-sequence position.
+        random_seed:     Seed for reproducible shuffling (None = non-deterministic).
     """
+    import random
     import yaml
     cfg = yaml.safe_load(open(config_path))
     panels = cfg["lab_data"]["panels"]
 
+    panel_items = list(panels.items())   # [('cbc', cfg), ('biochem', cfg), ('lipid', cfg)]
+
+    if shuffle_panels:
+        rng = random.Random(random_seed)
+        rng.shuffle(panel_items)
+
     feature_cols = []
     panel_ids = []
-    panel_names = list(panels.keys())   # ['cbc', 'biochem', 'lipid']
+    panel_names = [k for k, _ in panel_items]
 
-    for p_idx, (panel_key, panel_cfg) in enumerate(panels.items()):
+    for p_idx, (_, panel_cfg) in enumerate(panel_items):
         for col in panel_cfg["features"]:
             feature_cols.append(col)
             panel_ids.append(p_idx)
