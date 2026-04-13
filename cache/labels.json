@@ -1,0 +1,182 @@
+{
+  "0": {
+    "label": "cat: nose",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "1": {
+    "label": "car: side_fender",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "2": {
+    "label": "noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
+  },
+  "3": {
+    "label": "car: wheel",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "5": {
+    "label": "noise",
+    "include": false,
+    "confidence": 2,
+    "notes": ""
+  },
+  "6": {
+    "label": "car: windshield",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "7": {
+    "label": "bird: neck",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "8": {
+    "label": "bird: tail",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "9": {
+    "label": "cat: ear",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "10": {
+    "label": "cat: face",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "11": {
+    "label": "bird: feather",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "12": {
+    "label": "cat: leg",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "13": {
+    "label": "bird: wings",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "14": {
+    "label": "car: wheel_arch",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "15": {
+    "label": "car: wheel",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "16": {
+    "label": "cat: fur",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "17": {
+    "label": "bird: beak",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "18": {
+    "label": "car: bumpe_corner",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "19": {
+    "label": "bird: noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
+  },
+  "20": {
+    "label": "cat: eye",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "21": {
+    "label": "noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
+  },
+  "22": {
+    "label": "car: side_fender",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "23": {
+    "label": "cat: moustach",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "24": {
+    "label": "car: headlight",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "25": {
+    "label": "bird: eye",
+    "include": true,
+    "confidence": 2,
+    "notes": ""
+  },
+  "26": {
+    "label": "noise",
+    "include": false,
+    "confidence": 2,
+    "notes": ""
+  },
+  "27": {
+    "label": "cat: body_fur",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "28": {
+    "label": "noise",
+    "include": false,
+    "confidence": 3,
+    "notes": ""
+  },
+  "29": {
+    "label": "bird: leg",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  },
+  "4": {
+    "label": "bird:wings",
+    "include": true,
+    "confidence": 3,
+    "notes": ""
+  }
+}

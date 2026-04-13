@@ -5,7 +5,7 @@
 dataset:
   name: "custom"
   root: "data"
-  custom_path: "data/masked/train"  # all three class subdirs live here
+  custom_path: "data/v2/images/train"  # v2 = clean curated datasets (Oxford Pets / Stanford Cars / CUB-200)  # all three class subdirs live here
   download: true
 
 paths:
@@ -62,7 +62,7 @@ dino:
   extract_batch_size: 32
   pin_memory: false
   cache_dir: cache/
-  data_root: data/masked/train
+  data_root: data/v2/images/train
   classes: ["cat", "car", "bird"]   # all three classes
   features_cache: cache/dino_features.pt
   clusterer_path: cache/kmeans.pkl

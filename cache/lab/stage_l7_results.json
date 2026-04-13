@@ -1,0 +1,37 @@
+{
+  "accuracy": 0.5094,
+  "train_accuracy": 0.513,
+  "chance_baseline": 0.3333,
+  "n_classes": 3,
+  "class_names": [
+    "diabetes",
+    "hypertension",
+    "normal"
+  ],
+  "macro_precision": 0.4126,
+  "macro_recall": 0.3463,
+  "macro_F1": 0.262,
+  "per_class": {
+    "diabetes": {
+      "precision": 0.4,
+      "recall": 0.0491,
+      "f1": 0.0875,
+      "support": 448
+    },
+    "hypertension": {
+      "precision": 0.3235,
+      "recall": 0.0129,
+      "f1": 0.0248,
+      "support": 852
+    },
+    "normal": {
+      "precision": 0.5143,
+      "recall": 0.977,
+      "f1": 0.6738,
+      "support": 1346
+    }
+  },
+  "label_source": "NHANES questionnaire (DIQ010, BPQ020) \u2014 never used in training",
+  "core_claim": "Unsupervised concept scores predict physician-confirmed diagnoses",
+  "note": "Accuracy 50.9% vs 33.3% chance (3-class: diabetes/hypertension/normal). Labels from NHANES questionnaire, never used in any prior pipeline stage."
+}

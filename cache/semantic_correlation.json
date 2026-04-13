@@ -1,0 +1,35 @@
+{
+  "variants": {
+    "A": {
+      "silhouette": 0.0521,
+      "semantic_accuracy": 0.8914,
+      "semantic_metric": "class_purity (fraction of patches in dominant-class cluster)",
+      "nmi": 0.326,
+      "variant_name": "Full (multi-layer + FG mask + fine-tuned)"
+    },
+    "B": {
+      "silhouette": 0.0297,
+      "semantic_accuracy": 0.8757,
+      "semantic_metric": "class_purity (fraction of patches in dominant-class cluster)",
+      "nmi": 0.2977,
+      "variant_name": "Single-layer (L12 only)"
+    },
+    "C": {
+      "silhouette": 0.0347,
+      "semantic_accuracy": 0.8634,
+      "semantic_metric": "class_purity (fraction of patches in dominant-class cluster)",
+      "nmi": 0.2669,
+      "variant_name": "No FG masking (all patches, subsampled to 2.4M)"
+    },
+    "D": {
+      "silhouette": 0.045,
+      "semantic_accuracy": 0.935,
+      "semantic_metric": "class_purity (fraction of patches in dominant-class cluster)",
+      "nmi": 0.3633,
+      "variant_name": "Pre-finetune DINO (base weights)"
+    }
+  },
+  "pearson_r": 0.5585,
+  "p_value": 0.4415,
+  "note": "Semantic accuracy = class_purity from ablation study: fraction of patches in each cluster belonging to the same object class (bird/car/cat). Silhouette measures geometric cluster quality. Actual Pearson r = 0.5585 (not 0.94 \u2014 dissertation must be updated if different)."
+}

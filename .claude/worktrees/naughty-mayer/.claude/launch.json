@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Streamlit Labeler",
+      "runtimeExecutable": "streamlit",
+      "runtimeArgs": ["run", "src/clustering/streamlit_labeler.py"],
+      "port": 8501
+    },
+    {
+      "name": "MLflow Tracking Server",
+      "runtimeExecutable": "mlflow",
+      "runtimeArgs": ["server", "--host", "0.0.0.0", "--port", "5050"],
+      "port": 5050
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1"
+  tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1"
+  pageWidth="670" pageHeight="508" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="2" value="Domain-Informed Encoder Architecture  (Pillar 2)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="8" y="8" width="654" height="30" as="geometry" /></mxCell>
+    <mxCell id="3" value="Parallel design philosophy: multi-level feature extraction in both domains" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="8" y="40" width="654" height="16" as="geometry" /></mxCell>
+    <mxCell id="4" value="A · DINO ViT-S/8  (Image)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#ffffff;strokeColor=#1565C0;fontStyle=1;fontSize=10;align=center;" vertex="1" parent="1"><mxGeometry x="8" y="62" width="320" height="24" as="geometry" /></mxCell>
+    <mxCell id="5" value="Input Image  224×224 RGB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="13" y="94" width="310" height="30" as="geometry" /></mxCell>
+    <mxCell id="6" value="Patch Embedding
+8×8 patches → 784 tokens × 384-dim
+(28×28 spatial grid)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="13" y="132" width="310" height="48" as="geometry" /></mxCell>
+    <mxCell id="7" value="Vision Transformer  Layers 1–12
+
+★ Extract at  L8 · L10 · L12
+   (texture · structure · semantics)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="13" y="188" width="310" height="70" as="geometry" /></mxCell>
+    <mxCell id="8" value="3×384 = 1,152-dim" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="330" y="210" width="80" height="28" as="geometry" /></mxCell>
+    <mxCell id="9" value="Concatenate  L8 + L10 + L12
+→ 1,152-dim patch vector per patch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="13" y="266" width="310" height="38" as="geometry" /></mxCell>
+    <mxCell id="10" value="FG Attention Masking
+CLS attention → keep top 40% patches
+~300 foreground patches (of 784)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="13" y="312" width="310" height="48" as="geometry" /></mxCell>
+    <mxCell id="11" value="Output
+[N_images × ~300 × 1,152-dim]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#ffffff;strokeColor=#1565C0;fontStyle=1;fontSize=10;align=center;" vertex="1" parent="1"><mxGeometry x="13" y="368" width="310" height="36" as="geometry" /></mxCell>
+    <mxCell id="12" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=1.5;" edge="1" source="5" target="6" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="13" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=1.5;" edge="1" source="6" target="7" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="14" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=1.5;" edge="1" source="7" target="9" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="15" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=1.5;" edge="1" source="9" target="10" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="16" value="" style="endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=1.5;" edge="1" source="10" target="11" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="17" value="B · PanelFTTransformer — PSFTT  (Lab · Novel)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#ffffff;strokeColor=#2E7D32;fontStyle=1;fontSize=10;align=center;" vertex="1" parent="1"><mxGeometry x="342" y="62" width="320" height="24" as="geometry" /></mxCell>
+    <mxCell id="18" value="Input: 34 Lab Test Values (raw)
+CBC (14) · BMP (17) · Lipid (4)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="347" y="94" width="310" height="30" as="geometry" /></mxCell>
+    <mxCell id="19" value="Clinical Deviation Encoding
+T_i = (x_i − mid_i) / range_i
+0=normal · ±1=boundary · &gt;|1|=abnormal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="347" y="132" width="310" height="48" as="geometry" /></mxCell>
+    <mxCell id="20" value="Per-Feature Tokenizer  (no weight sharing)
+T_i = x_i · W_i + b_i  ∈ ℝ^d
++ Panel PE (CBC / BMP / Lipid)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="347" y="188" width="310" height="48" as="geometry" /></mxCell>
+    <mxCell id="21" value="Two-scale SSL pre-training:
+· Within-panel masking 40%
+· Cross-panel dropout" style="text;html=1;strokeColor=#f9a825;fillColor=#fffde7;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=8;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="347" y="244" width="310" height="44" as="geometry" /></mxCell>
+    <mxCell id="22" value="Transformer  Layers 1–6
+
+★ Extract at  L2 · L4 · L6
+   (early · mid · late)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="347" y="296" width="310" height="65" as="geometry" /></mxCell>
+    <mxCell id="23" value="Per-Panel Mean Pooling
+CBC tokens → e_CBC  ·  BMP → e_BMP  ·  Lipid → e_Lip" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=8;align=center;" vertex="1" parent="1"><mxGeometry x="347" y="369" width="310" height="38" as="geometry" /></mxCell>
+    <mxCell id="24" value="Output
+[N_records × 3 panels × 384-dim]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#ffffff;strokeColor=#2E7D32;fontStyle=1;fontSize=10;align=center;" vertex="1" parent="1"><mxGeometry x="347" y="415" width="310" height="36" as="geometry" /></mxCell>
+    <mxCell id="25" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="18" target="19" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="26" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="19" target="20" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="27" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="20" target="22" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="28" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="22" target="23" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="29" value="" style="endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="23" target="24" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="30" value="Key Parallelism: Both encoders extract at multiple depths → concat for richer representations  ·  Same PatchClusterer used downstream" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=8;align=left;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="8" y="462" width="654" height="30" as="geometry" /></mxCell>
+  </root>
+</mxGraphModel>

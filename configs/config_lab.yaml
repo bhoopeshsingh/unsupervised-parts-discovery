@@ -1,0 +1,229 @@
+# config_lab.yaml — NHANES Lab Report Concept Discovery Pipeline
+# ==============================================================================
+# Mirrors config.yaml structure so the same clustering/classification code
+# can be reused without modification.
+# ==============================================================================
+
+lab_data:
+  data_dir: data/lab_samples
+  cache_dir: cache/lab
+
+  # NHANES cycles to load — each adds ~5,000-8,000 records.
+  # Columns are consistent across cycles; records tagged with cycle_year.
+  # Note: 2019-2020 (pre-pandemic) XPT files are not publicly downloadable
+  # from the CDC in standard format; using 3 complete cycles (2013-2018).
+  cycles:
+    - year: "2017-2018"
+      prefix: ""
+      suffix: "_J"
+      url_base: "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles"
+    - year: "2015-2016"
+      prefix: ""
+      suffix: "_I"
+      url_base: "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2015/DataFiles"
+    - year: "2013-2014"
+      prefix: ""
+      suffix: "_H"
+      url_base: "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2013/DataFiles"
+
+  # Base filenames — prefix + base + suffix resolved per cycle above
+  file_bases:
+    cbc:          CBC
+    biochem:      BIOPRO
+    cholesterol:  TCHOL
+    hdl:          HDL
+    lipid:        TRIGLY
+    demographics: DEMO    # loaded for full_df only — never used as features
+
+  # Validation-only files — loaded into records_with_demo.csv but NEVER
+  # used as training features, so there is no label leakage.
+  # Purpose: post-hoc cluster enrichment analysis (Gap 1 proof).
+  validation_files:
+    ghb: GHB      # Glycohemoglobin → LBXGH = HbA1c (%)
+    diq: DIQ      # Diabetes questionnaire → DIQ010 (1=Yes, 2=No/Borderline)
+    bpq: BPQ      # Blood pressure questionnaire → BPQ020 (1=Yes, 2=No)
+
+  # Columns to extract from each validation file (per record)
+  validation_columns:
+    ghb:
+      LBXGH:  "HbA1c (%)"
+    diq:
+      DIQ010: "Diabetes diagnosis (1=Yes 2=No 3=Borderline)"
+    bpq:
+      BPQ020: "High blood pressure diagnosis (1=Yes 2=No)"
+
+  # Drop records missing more than this fraction of feature values
+  min_valid_ratio: 0.70
+
+  # Feature panels — column → human-readable label
+  panels:
+    cbc:
+      label: "Complete Blood Count"
+      features:
+        LBXWBCSI: "WBC (×10³/μL)"
+        LBXRBCSI: "RBC (×10⁶/μL)"
+        LBXHGB:   "Hemoglobin (g/dL)"
+        LBXHCT:   "Hematocrit (%)"
+        LBXMCVSI: "MCV (fL)"
+        LBXMCHSI: "MCH (pg)"
+        LBXMC:    "MCHC (g/dL)"
+        LBXRDW:   "RDW (%)"
+        LBXPLTSI: "Platelets (×10³/μL)"
+        LBXMPSI:  "MPV (fL)"
+        LBDLYMNO: "Lymphocytes (×10³/μL)"
+        LBDMONO:  "Monocytes (×10³/μL)"
+        LBDEONO:  "Eosinophils (×10³/μL)"
+        LBDNENO:  "Neutrophils (×10³/μL)"
+
+    biochem:
+      label: "Basic Metabolic Panel"
+      features:
+        LBXSGL:   "Glucose (mg/dL)"
+        LBXSBU:   "BUN (mg/dL)"
+        LBXSCR:   "Creatinine (mg/dL)"
+        LBXSNASI: "Sodium (mEq/L)"
+        LBXSKSI:  "Potassium (mEq/L)"
+        LBXSCLSI: "Chloride (mEq/L)"
+        LBXSC3SI: "Bicarbonate (mEq/L)"
+        LBXSCA:   "Calcium (mg/dL)"
+        LBXSAL:   "Albumin (g/dL)"
+        LBXSTP:   "Total Protein (g/dL)"
+        LBXSGB:   "Globulin (g/dL)"
+        LBXSTB:   "Total Bilirubin (mg/dL)"
+        LBXSATSI: "ALT (U/L)"
+        LBXSASSI: "AST (U/L)"
+        LBXSAPSI: "Alk Phosphatase (U/L)"
+        LBXSUA:   "Uric Acid (mg/dL)"
+
+    lipid:
+      label: "Lipid Panel"
+      features:
+        LBXTC:  "Total Cholesterol (mg/dL)"
+        LBDHDD: "HDL (mg/dL)"
+        LBDLDL: "LDL (mg/dL)"
+        LBXTR:  "Triglycerides (mg/dL)"
+
+# ==============================================================================
+# PANEL-STRUCTURED FEATURE TOKENIZATION TRANSFORMER
+# ==============================================================================
+# Multi-granularity concept discovery via intermediate layer extraction.
+#
+# Panel-patch vector = concat of per-panel mean-pooled tokens at extract_layers:
+#   extract_layers [1,3,5] → early (test correlations) / mid (panel pattern) / late (systemic)
+#   patch_dim = len(extract_layers) * d_model = 3 * 128 = 384
+#
+# Pre-training uses two-scale SSL:
+#   scale1: within-panel masked reconstruction  (40% tests masked per panel)
+#   scale2: cross-panel panel-dropout prediction (entire panel dropped, CLS predicts mean dev)
+#
+# n_clusters_per_panel: GMM clusters applied independently per panel
+#   Total concept dimensions per record = n_panels * n_clusters_per_panel = 3 * 10 = 30
+# ==============================================================================
+transformer:
+  d_model: 128
+  n_heads: 4
+  n_layers: 6
+  dropout: 0.1
+  extract_layers: [1, 3, 5]        # 0-indexed: picks layers 2, 4, 6 (early/mid/late)
+  n_clusters_per_panel: 10         # GMM clusters per panel → 30 total concept dims
+  weights_path:       cache/lab/transformer.pt
+  panel_patches_path: cache/lab/panel_patches.pt
+  # Experiment: shuffle panel order before building the feature sequence.
+  # Tests whether the model relies on panel PE identity vs. fixed feature position.
+  # Change random_seed between runs to try different orderings.
+  shuffle_panels: false
+  shuffle_panels_seed: 42
+  pretrain:
+    n_epochs: 50
+    batch_size: 256
+    lr: 0.001
+    device: cpu                    # change to 'mps' (Apple) or 'cuda' (GPU)
+
+# ==============================================================================
+# FEATURE EMBEDDING
+# ==============================================================================
+# method: clinical_deviation  — encode as deviation from clinical normal range (RECOMMENDED)
+#                                Used as transformer INPUT and flat-baseline comparison.
+#         zscore              — simple population z-score (fast baseline)
+# ==============================================================================
+embedding:
+  method: clinical_deviation
+
+  # Clinical reference ranges [low_normal, high_normal]
+  # Source: standard adult reference intervals (gender-pooled for unsupervised use)
+  clinical_ranges:
+    # CBC
+    LBXWBCSI: [4.5,   11.0]
+    LBXRBCSI: [4.0,    5.5]
+    LBXHGB:   [12.0,  17.5]
+    LBXHCT:   [36.0,  53.0]
+    LBXMCVSI: [80.0, 100.0]
+    LBXMCHSI: [27.0,  33.0]
+    LBXMC:    [33.0,  36.0]
+    LBXRDW:   [11.5,  14.5]
+    LBXPLTSI: [150.0, 400.0]
+    LBXMPSI:  [7.5,   12.5]
+    LBDLYMNO: [1.0,    4.8]
+    LBDMONO:  [0.2,    0.8]
+    LBDEONO:  [0.0,    0.5]
+    LBDNENO:  [1.8,    7.7]
+    # Metabolic
+    LBXSGL:   [70.0,  100.0]
+    LBXSBU:   [7.0,    20.0]
+    LBXSCR:   [0.6,    1.2]
+    LBXSNASI: [136.0, 145.0]
+    LBXSKSI:  [3.5,    5.0]
+    LBXSCLSI: [98.0,  107.0]
+    LBXSC3SI: [22.0,   29.0]
+    LBXSCA:   [8.5,   10.5]
+    LBXSAL:   [3.4,    5.0]
+    LBXSTP:   [6.3,    8.2]
+    LBXSGB:   [2.0,    3.5]
+    LBXSTB:   [0.2,    1.2]
+    LBXSATSI: [7.0,   56.0]
+    LBXSASSI: [10.0,  40.0]
+    LBXSAPSI: [44.0, 147.0]
+    LBXSUA:   [2.6,    7.2]
+    # Lipid
+    LBXTC:    [0.0,  200.0]
+    LBDHDD:   [40.0,  80.0]
+    LBDLDL:   [0.0,  100.0]
+    LBXTR:    [0.0,  150.0]
+
+# ==============================================================================
+# CLUSTERING
+# ==============================================================================
+clustering:
+  n_clusters: 15       # ~5-7 major clinical patterns + subcategories; tune with find_optimal_k
+  method: gmm          # GMM handles unequal cluster sizes (rare vs common conditions)
+  use_pca: true
+  pca_dims: 20         # 34 features → 20 PCA dims (retains ~90% variance)
+  random_seed: 42
+  n_init: 10
+  max_iter: 300
+  gmm_max_fit_samples: 50000
+  use_spatial_features: false   # no spatial component for tabular data
+  use_spatial_smoothing: false  # no neighbour structure in tabular data
+
+# ==============================================================================
+# CONCEPT LABELING
+# ==============================================================================
+concepts:
+  labels_path:    cache/lab/labels.json
+  vectors_cache:  cache/lab/concept_vectors.pt
+  scores_cache:   cache/lab/concept_scores.pt
+  topk_records:   10    # top-K representative records shown per cluster in GUI
+
+# ==============================================================================
+# CLASSIFICATION
+# ==============================================================================
+classification:
+  classifier_path: cache/lab/classifier.pkl
+  explanation_dir: cache/lab/
+  C: 1.0
+  max_iter: 1000
+  test_size: 0.2
+  random_seed: 42
+
+wandb:
+  project: lab-concept-discovery

@@ -49,6 +49,10 @@ Thumbs.db
 !assets/*.png
 !assets/*.jpg
 
+# Secrets
+.env
+.env.*
+
 # Logs
 *.log
 logs/

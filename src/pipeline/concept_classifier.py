@@ -244,9 +244,30 @@ def render_dissertation_explanation(
     import matplotlib.patches as mpatches
     import matplotlib.gridspec as gridspec
 
-    n_concepts = len(concept_names)
-    cmap = plt.cm.get_cmap("tab10", n_concepts)
-    concept_colors = {name: cmap(i)[:3] for i, name in enumerate(concept_names)}
+    # Assign grey to concepts with zero/negligible activation; give active
+    # concepts distinct colours from a 20-colour qualitative palette so no
+    # two active concepts share the same hue.
+    INACTIVE_GREY = (0.72, 0.72, 0.72)          # light grey
+    ACTIVE_PALETTE = [                           # 20 perceptually distinct colours
+        "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
+        "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
+        "#dcbeff", "#9A6324", "#fffac8", "#800000", "#aaffc3",
+        "#808000", "#ffd8b1", "#000075", "#a9a9a9", "#000000",
+    ]
+
+    scores = result["concept_scores"]
+    ACTIVE_THRESHOLD = 0.05                      # scores below this → grey
+
+    active_concepts = [n for n in concept_names if scores.get(n, 0) > ACTIVE_THRESHOLD]
+    colour_iter = iter(ACTIVE_PALETTE)
+    concept_colors: dict = {}
+    for name in concept_names:
+        if name in active_concepts:
+            hex_col = next(colour_iter, "#555555")   # fallback if >20 active
+            r, g, b = int(hex_col[1:3], 16), int(hex_col[3:5], 16), int(hex_col[5:7], 16)
+            concept_colors[name] = (r / 255, g / 255, b / 255)
+        else:
+            concept_colors[name] = INACTIVE_GREY
 
     # ---- load & resize image --------------------------------------------------
     img = np.array(PILImage.open(image_path).convert("RGB").resize((224, 224)))
@@ -271,13 +292,12 @@ def render_dissertation_explanation(
         fg_224 = np.array(
             PILImage.fromarray(fg_28 * 255).resize((224, 224), PILImage.NEAREST)
         ) / 255.0
-        alpha = 0.25 + 0.55 * fg_224   # background=0.25, foreground=0.80
+        alpha = 0.80 * fg_224   # background=0 (no overlay), foreground=0.80
 
     blended = (img / 255.0) * (1 - alpha[:, :, None]) + overlay * alpha[:, :, None]
     blended = np.clip(blended, 0, 1)
 
     # ---- bar chart data -------------------------------------------------------
-    scores = result["concept_scores"]
     contribs = result["contributions"]
     sorted_names = sorted(concept_names, key=lambda c: abs(contribs[c]), reverse=True)
     bar_values = [contribs[n] for n in sorted_names]
@@ -287,40 +307,28 @@ def render_dissertation_explanation(
     ]
 
     # ---- layout ---------------------------------------------------------------
-    fig = plt.figure(figsize=(16, 6))
-    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 1.1], wspace=0.35)
+    # Single-row GridSpec: 3 panels side by side.
+    fig = plt.figure(figsize=(18, 6))
+    gs = gridspec.GridSpec(
+        1, 3,
+        width_ratios=[1, 1, 1.4],
+        wspace=0.35,
+    )
 
     # Panel 1 — original
-    ax0 = fig.add_subplot(gs[0])
+    ax0 = fig.add_subplot(gs[0, 0])
     ax0.imshow(img)
     ax0.set_title("Input Image", fontsize=12, fontweight="bold")
     ax0.axis("off")
 
     # Panel 2 — semantic overlay
-    ax1 = fig.add_subplot(gs[1])
+    ax1 = fig.add_subplot(gs[0, 1])
     ax1.imshow(blended)
     ax1.set_title("Semantic Part Map", fontsize=12, fontweight="bold")
     ax1.axis("off")
-    legend_patches = [
-        mpatches.Patch(
-            facecolor=concept_colors[n],
-            edgecolor="white",
-            label=n.replace("_", " "),
-        )
-        for n in concept_names
-    ]
-    ax1.legend(
-        handles=legend_patches,
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.28),
-        ncol=2,
-        fontsize=7.5,
-        frameon=True,
-        framealpha=0.9,
-    )
 
     # Panel 3 — bar chart
-    ax2 = fig.add_subplot(gs[2])
+    ax2 = fig.add_subplot(gs[0, 2])
     y_pos = np.arange(len(sorted_names))
     bars = ax2.barh(y_pos, bar_values, color=bar_colors, edgecolor="white", height=0.65)
     for i, (bar, score) in enumerate(zip(bars, bar_scores)):
@@ -346,17 +354,6 @@ def render_dissertation_explanation(
         color="#1a237e" if pred == "CAT" else "#b71c1c",
     )
 
-    # top concept summary below title
-    top3 = [n.replace("_", " ") for n in sorted_names[:3] if bar_scores[concept_names.index(n) if n in concept_names else 0] > 0.3]
-    if top3:
-        fig.text(
-            0.98, 0.02,
-            "Evidence: " + ", ".join(top3),
-            ha="right", va="bottom", fontsize=8.5, color="#555",
-            style="italic",
-        )
-
-    plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
         print(f"Dissertation figure saved → {save_path}")

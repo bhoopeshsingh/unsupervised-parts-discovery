@@ -213,30 +213,75 @@ def stage_concepts(cfg):
 
 
 def stage_classify(cfg):
+    """
+    3-class concept classifier: cat vs car vs bird.
+
+    Input : concept activation scores  [N_images, n_concepts]
+    Labels: true class index            [N_images]  (0=bird, 1=car, 2=cat — alphabetical)
+    Model : Logistic Regression (multi-class, L2) on concept score vectors.
+
+    This directly tests Gap 1 + Gap 3:
+      - Concept scores (not raw pixels) are sufficient for accurate classification
+      - Named, interpretable concepts → auditable prediction
+    """
     print("\n" + "=" * 60)
-    print("STAGE 6: One-Class Concept Classifier  (cat vs not-cat)")
+    print("STAGE 6: 3-Class Concept Classifier  (cat | car | bird)")
     print("=" * 60)
-    from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
 
-    scores_data = torch.load(
-        cfg["concepts"]["scores_cache"], weights_only=False
-    )
-    scores = scores_data["scores"].numpy()
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import classification_report, accuracy_score
+    import pickle, numpy as np
+
+    scores_data   = torch.load(cfg["concepts"]["scores_cache"], weights_only=False)
+    scores        = scores_data["scores"].numpy()          # [N, C]
+    image_labels  = np.array(scores_data["image_labels"])  # [N] int
     concept_names = scores_data["concept_names"]
+    class_names   = scores_data["class_names"]             # ['bird','car','cat']
 
-    print(f"Training on {len(scores)} cat images × {len(concept_names)} concepts")
-    clf = CatConceptOneClassClassifier(method="ocsvm", nu=0.1)
-    clf.fit(scores)
+    print(f"  Images      : {len(scores)}")
+    print(f"  Concepts    : {len(concept_names)}")
+    print(f"  Classes     : {class_names}")
+    for i, cls in enumerate(class_names):
+        print(f"    {cls}: {(image_labels == i).sum()} images")
 
-    preds, dec_scores, confs = clf.predict(scores)
-    cat_rate = sum(p == "cat" for p in preds) / len(preds)
-    print(f"Cat recall (train): {cat_rate:.1%}  |  avg confidence: {confs.mean():.3f}")
-
-    classifier_path = cfg["classification"].get(
-        "classifier_path", "cache/concept_classifier.pkl"
+    # Train / test split (stratified)
+    test_size = cfg["classification"].get("test_size", 0.2)
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        scores, image_labels,
+        test_size=test_size,
+        stratify=image_labels,
+        random_state=cfg["classification"].get("random_seed", 42),
     )
-    clf.save(classifier_path)
-    print(f"Saved one-class classifier → {classifier_path}")
+
+    clf = LogisticRegression(
+        C=cfg["classification"].get("C", 1.0),
+        max_iter=cfg["classification"].get("max_iter", 1000),
+        solver="lbfgs",
+        random_state=cfg["classification"].get("random_seed", 42),
+    )
+    clf.fit(X_tr, y_tr)
+
+    train_acc = accuracy_score(y_tr, clf.predict(X_tr))
+    test_acc  = accuracy_score(y_te, clf.predict(X_te))
+    print(f"\n  Train accuracy : {train_acc:.1%}")
+    print(f"  Test  accuracy : {test_acc:.1%}")
+    print()
+    print(classification_report(y_te, clf.predict(X_te), target_names=class_names))
+
+    # Save — wrap with metadata so label_tool.py can load class names
+    classifier_path = cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl")
+    payload = {
+        "clf":           clf,
+        "class_names":   class_names,
+        "concept_names": concept_names,
+        "test_accuracy": test_acc,
+        "train_accuracy": train_acc,
+    }
+    Path(classifier_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(classifier_path, "wb") as f:
+        pickle.dump(payload, f)
+    print(f"  ✓  Saved 3-class classifier → {classifier_path}")
     return clf
 
 
