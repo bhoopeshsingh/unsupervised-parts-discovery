@@ -1,0 +1,129 @@
+1) What API/library is used at each stage
+Image pipeline
+Stage 1 — feature extraction
+File: experiments/extract_features.py
+Main libraries/APIs:
+torch
+torch.hub.load("facebookresearch/dino:main", "dino_vits8", pretrained=True)
+this loads the DINO ViT-S/8 model
+torchvision.transforms
+PIL.Image
+tqdm
+yaml
+Core model API:
+DinoExtractor.extract_patches(...)
+DinoExtractor.extract_attention(...)
+DinoExtractor.load_image(...)
+
+Stage 2 — clustering patches
+File: src/pipeline/patch_clusterer.py
+Main libraries/APIs:
+numpy
+torch
+sklearn.cluster.MiniBatchKMeans
+sklearn.mixture.GaussianMixture
+sklearn.decomposition.PCA
+sklearn.preprocessing.normalize
+Core API:
+PatchClusterer.fit(...)
+PatchClusterer.predict(...)
+PatchClusterer.smooth_labels(...)
+
+Stage 3 — concept building
+File: src/pipeline/concept_builder.py
+Main libraries/APIs:
+torch
+numpy
+json
+yaml
+torch.nn.functional.normalize
+Core API:
+build_concept_vectors()
+compute_concept_scores_all()
+This is where cluster labels are turned into named concepts and concept-score vectors.
+
+Stage 4 — multiclass classification on concept activations
+Files: experiments/run_pipeline.py, src/pipeline/concept_classifier.py
+Main libraries/APIs:
+sklearn.linear_model.LogisticRegression
+sklearn.model_selection.train_test_split
+sklearn.metrics.accuracy_score
+sklearn.metrics.classification_report
+pickle
+torch
+Core API:
+stage_classify(cfg) in run_pipeline.py
+ConceptClassifier.fit(...) if you use the reusable class
+compute_image_concept_scores(...)
+So the concept classifier is basically:
+concept-score vector in → logistic regression → class out
+
+Stage 5 — explanation / visualization
+Files: src/pipeline/concept_classifier.py, src/pipeline/patch_clusterer.py
+Main libraries/APIs:
+matplotlib
+PIL
+numpy
+torch
+Core API:
+get_spatial_concept_map(...)
+render_dissertation_explanation(...)
+render_explanation(...)
+visualise_part_map(...)
+
+Optional fine-tuning stage
+File: src/models/dino_finetuner.py
+Main libraries/APIs:
+torch
+torch.nn
+torch.optim.AdamW
+torch.utils.data.DataLoader
+PIL.Image
+torchvision.transforms
+Core API:
+DinoSemanticFinetuner.train_epoch(...)
+DinoSemanticFinetuner.save(...)
+DinoSemanticFinetuner.load_weights_into_extractor(...)
+
+Lab pipeline
+Stage 1 — data loading / preprocessing
+Main libraries/APIs:
+pandas
+numpy
+torch
+yaml
+The lab pipeline uses NHANES records and clinical features.
+
+Stage 2 — transformer-based feature extraction
+File: src/models/panel_ft_transformer.py
+Main libraries/APIs:
+torch
+torch.nn
+This is your clinical equivalent of DINO:
+instead of image patches, you have panel-patch embeddings
+instead of visual parts, you discover clinical concepts
+
+Stage 3 — clustering lab representations
+Main libraries/APIs:
+sklearn.cluster.MiniBatchKMeans or GaussianMixture
+sklearn.decomposition.PCA
+numpy
+torch
+Same idea as the image pipeline:
+embeddings → cluster → concept names
+
+Stage 4 — lab concept classification
+File: experiments/run_lab_pipeline.py
+Main libraries/APIs:
+sklearn.linear_model.LogisticRegression
+sklearn.model_selection.train_test_split
+sklearn.metrics.classification_report
+sklearn.metrics.accuracy_score
+This mirrors the image concept classification stage.
+
+Stage 5 — LLM-assisted labeling
+Main libraries/APIs:
+Streamlit UI
+LLM backend such as Ollama / Claude API
+JSON / CSV cache files
+This is the lab equivalent of “human naming” for image clusters.

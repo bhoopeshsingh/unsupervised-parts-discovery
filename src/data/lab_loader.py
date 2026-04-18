@@ -1,10 +1,6 @@
 # src/data/lab_loader.py
 """
-NHANES Lab Report Loader — multi-cycle support
-
-Loads and merges NHANES XPT panel files across multiple survey cycles
-(2013-2014, 2015-2016, 2017-2018) into a single clean DataFrame.
-Each row = one patient record tagged with its survey cycle.
+Merge NHANES .xpt panels from several cycles into one table (one row per participant).
 
 Usage:
     from src.data.lab_loader import load_nhanes
@@ -134,10 +130,22 @@ def load_nhanes(
             all_val.append(val_df)
 
     if not all_lab:
-        raise FileNotFoundError(
-            f"No XPT files found in {data_dir}.\n"
-            "Run:  python experiments/run_lab_pipeline.py --stage download"
+        abs_dir = data_dir.resolve()
+        hint = (
+            f"Nothing loaded from:\n  {abs_dir}\n\n"
+            "Names should match config_lab.yaml (e.g. CBC_J.xpt / BIOPRO_J.xpt for the 2017–18 cycle). "
+            "Generate curls with:\n  python experiments/run_lab_pipeline.py --stage download\n"
+            "then save files under that directory.\n"
         )
+        if data_dir.exists():
+            xpts = list(data_dir.glob("*.xpt")) + list(data_dir.glob("*.XPT"))
+            if xpts:
+                hint += f"\nFound these (if names differ from the config, fix or trim cycles): {[p.name for p in xpts[:15]]}"
+            else:
+                hint += "\nFolder is empty or has no .xpt files."
+        else:
+            hint += f"\nmkdir -p {abs_dir}"
+        raise FileNotFoundError(hint)
 
     merged     = pd.concat(all_lab, ignore_index=True)
     demo_merged = pd.concat(all_demo, ignore_index=True) if all_demo else None

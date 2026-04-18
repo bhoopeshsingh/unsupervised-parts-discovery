@@ -5,6 +5,7 @@ Extracts patch-level features: shape [784, 384] per 224x224 image.
 784 = 28x28 spatial grid of 8x8 patches. 384 = embedding dimension for ViT-S.
 """
 import warnings
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -119,8 +120,8 @@ class DinoExtractor:
 
         Args:
             image_path: path to image file
-            fg_threshold: quantile threshold — keep patches with attention > this quantile.
-                          0.5 = keep top 50% (matches extract_features.py default).
+            fg_threshold: attention quantile q; keep patches with score > quantile(q).
+                          e.g. 0.75 → roughly the top (1−q) fraction of patches by attention.
         Returns:
             foreground patch features [K, 384] where K <= 784
         """
@@ -135,10 +136,17 @@ class DinoExtractor:
         return feats[fg_indices]                                 # [K, 384]
 
     def extract_all_patches_with_fg_mask(
-        self, image_path, fg_threshold: float = 0.5
+        self, image_path, fg_threshold: Optional[float] = 0.5
     ) -> tuple:
         """
         Extract all 784 patch features plus a foreground mask.
+
+        If fg_threshold is None, all patches are treated as foreground (matches
+        extract_features.py with use_fg_mask=False).
+
+        Otherwise, masking matches the batch extractor: same quantile rule, plus
+        a safety fallback when fewer than 10 patches would pass (top 25% of
+        patches by attention, at least 10).
 
         Returns:
             features [784, 384]  — all patch features (for spatial mapping)
@@ -146,10 +154,20 @@ class DinoExtractor:
         """
         tensor = self.load_image(image_path)
         feats = self.extract_patches(tensor).squeeze(0).cpu()    # [784, 384]
+        if fg_threshold is None:
+            fg_mask = torch.ones(feats.shape[0], dtype=torch.bool)
+            return feats, fg_mask
+
         attn = self.extract_attention(tensor)                     # [1, heads, 785, 785]
         cls_attn = attn[0, :, 0, 1:].mean(dim=0).cpu()          # [784]
         threshold = cls_attn.quantile(fg_threshold)
         fg_mask = cls_attn > threshold                            # [784] bool
+        fg_indices = fg_mask.nonzero(as_tuple=True)[0]
+        if len(fg_indices) < 10:
+            k = max(10, feats.shape[0] // 4)
+            fg_indices = cls_attn.topk(k).indices
+            fg_mask = torch.zeros_like(fg_mask)
+            fg_mask[fg_indices] = True
         return feats, fg_mask
 
     def get_spatial_grid(self):

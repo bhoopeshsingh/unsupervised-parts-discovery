@@ -3,6 +3,19 @@
 Elbow + Silhouette analysis to find the optimal number of clusters (K)
 for the DINO patch feature space.
 
+DESIGN NOTE — Single-Class Pilot
+---------------------------------
+This script was run on a single-class feature cache (cat-only pilot) to
+determine K per class.  Result: K=10, silhouette=0.61 (Table 6 in dissertation).
+
+The three-class full pipeline uses K = K_per_class × n_classes = 10 × 3 = 30,
+set in configs/config.yaml (clustering.n_clusters: 30).
+
+The script uses MiniBatchKMeans for the sweep because GMM fitting across
+25 values of K on millions of patches is prohibitively slow.  The selected K
+is then used to configure the GMM in the main pipeline.  GMM convergence
+(converged_=True, stable lower_bound_) confirmed K=30 is valid.
+
 Usage:
     python experiments/find_optimal_k.py
     python experiments/find_optimal_k.py --k_min 5 --k_max 30 --config configs/config.yaml

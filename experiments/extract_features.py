@@ -45,8 +45,10 @@ def collect_images(data_dir: str, classes_filter=None):
     return paths, labels, class_names
 
 
-def extract_all(config_path: str = "configs/config.yaml",
-                finetune_weights: str = None):
+def extract_all(
+    config_path: str = "configs/config.yaml",
+    finetune_weights: str = None,
+):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
     dcfg = cfg["dino"]
@@ -73,16 +75,21 @@ def extract_all(config_path: str = "configs/config.yaml",
     classes_filter = dcfg.get("classes")  # e.g. ["cat"] for cat-only; None = all
     image_paths, image_labels, class_names = collect_images(data_dir, classes_filter=classes_filter)
     if not image_paths:
+        hint = (
+            "\n\nImage data is not shipped with the repo (see README). "
+            "Populate data with:\n"
+            "  python src/data/prepare_data.py --output_dir data/v2/images --num_images 4000"
+        )
         raise RuntimeError(
             f"No images found under {data_dir}"
             + (f" for classes {classes_filter}" if classes_filter else "")
+            + hint
         )
     print(f"Found {len(image_paths)} images across classes: {class_names}")
 
-    # Foreground masking: use DINO attention to drop background patches before clustering.
-    # The CLS token naturally attends more to foreground (object) than background.
-    # fg_threshold=0.5 means: keep only the top 50% most-attended patches per image.
-    # Set fg_threshold: null in config to disable masking and keep all patches.
+    # Foreground masking: keep patches whose CLS attention is above quantile(fg_threshold).
+    # Example: fg_threshold 0.75 → ~top 25% of patches by attention (see configs/config.yaml).
+    # fg_threshold: null disables masking (all 784 patches kept).
     fg_threshold = dcfg.get("fg_threshold", 0.5)
     use_fg_mask = fg_threshold is not None
     if use_fg_mask:

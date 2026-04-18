@@ -5,6 +5,7 @@
 # ==============================================================================
 
 lab_data:
+  # Downloaded CDC SAS transport files live here (see run_lab_pipeline --stage download).
   data_dir: data/lab_samples
   cache_dir: cache/lab
 

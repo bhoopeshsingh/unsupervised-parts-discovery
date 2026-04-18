@@ -1,49 +1,15 @@
 # experiments/run_lab_pipeline.py
 """
-End-to-end Lab Report Concept Discovery Pipeline — Phase 2 of the dissertation.
+Phase 2: NHANES lab reports → unsupervised concepts → LogReg on diagnoses
+the model never trained on (same headline claim as the image pipeline).
 
-╔══════════════════════════════════════════════════════════════════════════════╗
-║  DISSERTATION CORE CLAIM                                                     ║
-║                                                                              ║
-║  "Concepts discovered without supervision predict clinical diagnoses         ║
-║   they were never trained on."                                               ║
-║                                                                              ║
-║  This pipeline proves it:                                                    ║
-║    1. PanelFTTransformer learns structure via SSL — zero label supervision   ║
-║    2. GMM clusters emerge from the learned representation                    ║
-║    3. LLM names the clusters from deviation profiles — no diagnosis used     ║
-║    4. stage_classify: logistic regression on concept scores predicts         ║
-║       physician-confirmed diabetes + hypertension with no training labels    ║
-║    5. stage_validate: per-cluster enrichment analysis quantifies how         ║
-║       much each discovered concept aligns with clinical ground truth         ║
-║                                                                              ║
-║  Differentiates from TCAV / CBM: concepts emerge first, labels never seen   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+Rough map vs images: DINO patches / GMM / concept scores / LogReg here become
+panel patches, PanelFT + SSL, GMM per panel, then clinical outcome prediction.
 
-Pipeline analogy to Phase 1 (images) — same 3-pillar architecture, new domain:
+Stages: load (merge .xpt) → extract → pretrain → encode → cluster → (label in UI)
+→ concepts → classify → validate.
 
-  Phase 1 (image)            Phase 2 (lab)
-  ─────────────────────────  ─────────────────────────────────────────────
-  DINO ViT-S/8               PanelFTTransformer (FT-Transformer + panel PE)
-  Spatial patch (8×8 px)     Panel-patch (CBC / BMP / Lipid features)
-  Layers 8, 10, 12 → 1152d   Layers 1, 3, 5 → 384d
-  GMM 30 clusters            GMM 30 clusters (10 per panel)
-  Human labels visual parts  LLM names clinical patterns from deviations
-  concept scores = patch %   concept scores = soft GMM memberships
-  LogReg → cat/car/bird      LogReg → diabetes / hypertension / normal
-  patch purity metric        cluster enrichment metric (vs base rate)
-
-Stages:
-  L1: load      — merge XPT panels → records.csv + validation labels (HbA1c, DIQ, BPQ)
-  L2: extract   — clinical deviation encoding → features.pt
-  L3: pretrain  — two-scale SSL → transformer.pt
-  L4: encode    — per-panel multi-layer patches → panel_patches.pt
-  L5: cluster   — per-panel GMM → panel_clusters.pt
-  L6: concepts  — concept vectors from labeled clusters (after labeling GUI)
-  L7: classify  — LogReg on concept scores → predict diabetes/hypertension
-  L8: validate  — per-cluster enrichment vs clinical ground truth (core claim proof)
-
-Usage:
+Examples:
   python experiments/run_lab_pipeline.py --stage all
   python experiments/run_lab_pipeline.py --stage classify
   python experiments/run_lab_pipeline.py --stage validate
@@ -85,28 +51,45 @@ def _clear_files(paths, reason=""):
 # Stage: download
 # ---------------------------------------------------------------------------
 
-def stage_download():
-    print("\nRun the following commands to download NHANES 2017-2018 XPT files:\n")
-    base = "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles"
-    files = ["CBC_J.xpt", "BIOPRO_J.xpt", "TCHOL_J.xpt",
-             "HDL_J.xpt", "TRIGLY_J.xpt", "DEMO_J.xpt"]
+def stage_download(config_path: str = CONFIG):
+    """Print curl lines for each .xpt listed in config_lab.yaml (does not run curl for you)."""
+    cfg = yaml.safe_load(open(config_path))
+    dcfg = cfg["lab_data"]
+    file_bases = dcfg["file_bases"]
+    val_bases = dcfg.get("validation_files") or {}
+    # Lab panels + demographics + validation-only (HbA1c, diabetes/BP questionnaires)
+    bases = list(file_bases.values()) + list(val_bases.values())
+    cycles = dcfg["cycles"]
+
+    print("\nFiles below match config_lab.yaml — save them under data/lab_samples (mkdir first):\n")
     print("mkdir -p data/lab_samples && cd data/lab_samples")
-    for f in files:
-        print(f"curl -O {base}/{f}")
-    print("\nThen run:  python experiments/run_lab_pipeline.py --stage all")
+    print()
+    for c in cycles:
+        year = c["year"]
+        suffix = c["suffix"]
+        url_base = c["url_base"].rstrip("/")
+        print(f"# --- {year} ({suffix}) ---")
+        for base in bases:
+            fname = f"{base}{suffix}.xpt"
+            print(f"curl -fLO {url_base}/{fname}")
+        print()
+    print("Then from the project root:")
+    print("  python experiments/run_lab_pipeline.py --stage load")
+    print("  python experiments/run_lab_pipeline.py --stage all   # or run L2–L8 individually")
+    print("\nIf curl 404s, check that cycle’s DataFiles page — CDC names move occasionally.")
 
 
 # ---------------------------------------------------------------------------
 # Stage: load
 # ---------------------------------------------------------------------------
 
-def stage_load(cfg):
+def stage_load(cfg, config_path: str = CONFIG):
     print("\n" + "=" * 60)
     print("STAGE L1: Load & Merge NHANES Panels")
     print("=" * 60)
     from src.data.lab_loader import load_nhanes
 
-    features_df, full_df, feature_cols = load_nhanes(CONFIG)
+    features_df, full_df, feature_cols = load_nhanes(config_path)
 
     cache_dir = Path(cfg["lab_data"]["cache_dir"])
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -456,7 +439,7 @@ def stage_cluster(cfg):
         reason="re-cluster invalidates labels, concept vectors, scores, classifier",
     )
     print("\n  ⚠  Label clusters in the GUI before running --stage concepts:")
-    print("       streamlit run labeling/lab_label_tool.py")
+    print("       streamlit run labeling/lab_cluster_labeler.py")
 
     return clusterers, per_panel_labels
 
@@ -490,7 +473,7 @@ def stage_concepts(cfg):
 
     if not Path(labels_path).exists():
         print(f"ERROR: {labels_path} not found.")
-        print("Label clusters first:  streamlit run labeling/lab_label_tool.py")
+        print("Label clusters first:  streamlit run labeling/lab_cluster_labeler.py")
         sys.exit(1)
 
     human_labels = json.load(open(labels_path))   # {"cbc:3": {"label": "Iron def.", ...}, ...}
@@ -905,7 +888,7 @@ def main():
     args = parser.parse_args()
 
     if args.stage == "download":
-        stage_download()
+        stage_download(config_path=args.config)
         return
 
     cfg = yaml.safe_load(open(args.config))
@@ -914,7 +897,7 @@ def main():
     Path(cfg["lab_data"]["cache_dir"]).mkdir(parents=True, exist_ok=True)
 
     if args.stage in ("all", "load"):
-        stage_load(cfg)
+        stage_load(cfg, config_path=args.config)
     if args.stage in ("all", "extract"):
         stage_extract(cfg)
     if args.stage in ("all", "pretrain"):

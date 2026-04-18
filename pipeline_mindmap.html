@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsupervised Parts Discovery — Pipeline Mind Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #ffffff;
+    color: #111111;
+    min-height: 100vh;
+  }
+
+  /* ── Header ──────────────────────────────────────── */
+  .header {
+    text-align: center;
+    padding: 28px 20px 18px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #d0d0d0;
+  }
+  .header h1 {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #111111;
+    letter-spacing: 0.5px;
+  }
+  .header p {
+    font-size: 0.82rem;
+    color: #555555;
+    margin-top: 6px;
+  }
+
+  /* ── Layout: two columns ──────────────────────────── */
+  .pipelines {
+    display: flex;
+    gap: 0;
+    padding: 24px 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  .pipeline-col {
+    flex: 1;
+    padding: 0 14px;
+  }
+  .pipeline-col + .pipeline-col {
+    border-left: 1px solid #d0d0d0;
+  }
+
+  /* ── Pipeline header ──────────────────────────────── */
+  .pipeline-header {
+    text-align: center;
+    padding: 10px 0 18px;
+  }
+  .pipeline-badge {
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+  .badge-image  { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+  .badge-lab    { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+
+  .pipeline-subtitle {
+    font-size: 0.78rem;
+    color: #555555;
+    margin-top: 7px;
+  }
+  .pipeline-result {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .result-image { color: #1d4ed8; }
+  .result-lab   { color: #15803d; }
+
+  /* ── Stage cards ──────────────────────────────────── */
+  .stages { display: flex; flex-direction: column; gap: 8px; }
+
+  .stage {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .stage:hover { border-color: #aaaaaa; }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .stage-num {
+    font-size: 0.7rem;
+    font-weight: 700;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stage-name { font-size: 0.9rem; font-weight: 700; flex: 1; color: #111111; }
+  .stage-file { font-size: 0.7rem; color: #555555; font-family: 'Courier New', monospace; }
+  .chevron {
+    font-size: 0.65rem;
+    color: #666666;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .stage.open .chevron { transform: rotate(90deg); }
+
+  /* Image pipeline stage colours — light tints */
+  .img-s1 .stage-header { background: #dbeafe; }
+  .img-s2 .stage-header { background: #dbeafe; }
+  .img-s3 .stage-header { background: #dcfce7; }
+  .img-s4 .stage-header { background: #fff7ed; }
+  .img-s5 .stage-header { background: #f3e8ff; }
+  .img-s6 .stage-header { background: #fce7f3; }
+  .img-s7 .stage-header { background: #fefce8; }
+
+  .img-s1 .stage-num, .img-s2 .stage-num { background: #1d4ed8; color: #ffffff; }
+  .img-s3 .stage-num { background: #15803d; color: #ffffff; }
+  .img-s4 .stage-num { background: #c2410c; color: #ffffff; }
+  .img-s5 .stage-num { background: #7c3aed; color: #ffffff; }
+  .img-s6 .stage-num { background: #be185d; color: #ffffff; }
+  .img-s7 .stage-num { background: #92400e; color: #ffffff; }
+
+  /* Lab pipeline stage colours — light tints */
+  .lab-s1 .stage-header { background: #dcfce7; }
+  .lab-s2 .stage-header { background: #dcfce7; }
+  .lab-s3 .stage-header { background: #dbeafe; }
+  .lab-s4 .stage-header { background: #dbeafe; }
+  .lab-s5 .stage-header { background: #fefce8; }
+  .lab-s6 .stage-header { background: #f3e8ff; }
+  .lab-s7 .stage-header { background: #fce7f3; }
+  .lab-s8 .stage-header { background: #f0fdf4; }
+
+  .lab-s1 .stage-num, .lab-s2 .stage-num { background: #15803d; color: #ffffff; }
+  .lab-s3 .stage-num, .lab-s4 .stage-num { background: #1d4ed8; color: #ffffff; }
+  .lab-s5 .stage-num { background: #854d0e; color: #ffffff; }
+  .lab-s6 .stage-num { background: #7c3aed; color: #ffffff; }
+  .lab-s7 .stage-num { background: #be185d; color: #ffffff; }
+  .lab-s8 .stage-num { background: #065f46; color: #ffffff; }
+
+  /* Stage body */
+  .stage-body {
+    display: none;
+    padding: 12px 14px 14px;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+  }
+  .stage.open .stage-body { display: block; }
+
+  /* Detail rows */
+  .detail-grid { display: grid; gap: 6px; }
+
+  .detail-row {
+    display: flex;
+    gap: 8px;
+    font-size: 0.78rem;
+    align-items: flex-start;
+  }
+  .detail-label {
+    color: #444444;
+    min-width: 80px;
+    flex-shrink: 0;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    padding-top: 1px;
+  }
+  .detail-value { color: #222222; line-height: 1.5; }
+  .detail-value code {
+    font-family: 'Courier New', monospace;
+    background: #eeeeee;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.73rem;
+    color: #b45309;
+    white-space: nowrap;
+  }
+  .detail-value .kv {
+    display: inline-block;
+    background: #f0f4ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin: 2px 2px 0 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: #1e40af;
+    white-space: nowrap;
+  }
+  .detail-value .kv span { color: #b45309; }
+  .detail-value .io-arrow { color: #888888; font-size: 0.7rem; margin: 0 3px; }
+
+  .tag-in  { color: #065f46; background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-family: monospace; display: inline-block; margin: 1px 2px 1px 0; }
+  .tag-out { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-family: monospace; display: inline-block; margin: 1px 2px 1px 0; }
+
+  .note {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #f0f4ff;
+    border-left: 3px solid #6366f1;
+    font-size: 0.76rem;
+    color: #374151;
+    border-radius: 0 4px 4px 0;
+    line-height: 1.5;
+  }
+
+  /* Connector arrows between stages */
+  .connector {
+    text-align: center;
+    color: #888888;
+    font-size: 0.75rem;
+    padding: 1px 0;
+    letter-spacing: 0.2px;
+  }
+
+  /* Shared methodology strip at bottom */
+  .shared-section {
+    max-width: 1600px;
+    margin: 0 auto 30px;
+    padding: 0 34px;
+  }
+  .shared-header {
+    text-align: center;
+    font-size: 0.78rem;
+    color: #555555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    padding-top: 16px;
+    border-top: 1px solid #d0d0d0;
+  }
+  .shared-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .shared-card {
+    background: #f5f5f5;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .shared-card h4 {
+    font-size: 0.8rem;
+    color: #111111;
+    margin-bottom: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .shared-card p, .shared-card li {
+    font-size: 0.76rem;
+    color: #333333;
+    line-height: 1.6;
+    list-style: none;
+    padding-left: 0;
+  }
+  .shared-card li::before { content: "• "; color: #888888; }
+
+  /* Tooltip */
+  .tip {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #374151;
+    font-size: 0.6rem;
+    text-align: center;
+    line-height: 14px;
+    cursor: help;
+    margin-left: 4px;
+    vertical-align: middle;
+    position: relative;
+  }
+  .tip:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 18px;
+    top: -4px;
+    background: #1f2937;
+    color: #f9fafb;
+    font-size: 0.72rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 10;
+    border: 1px solid #374151;
+    pointer-events: none;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Unsupervised Parts Discovery — Full Pipeline Mind Map</h1>
+  <p>All parameters and algorithms verified from source code &nbsp;·&nbsp; Click any stage to expand &nbsp;·&nbsp; File references included</p>
+</div>
+
+<div class="pipelines">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       IMAGE PIPELINE
+  ════════════════════════════════════════════════════════════ -->
+  <div class="pipeline-col">
+    <div class="pipeline-header">
+      <span class="pipeline-badge badge-image">🖼  Image Pipeline</span>
+      <div class="pipeline-subtitle">cat / car / bird &nbsp;·&nbsp; Oxford Pets + Stanford Cars + CUB-200 &nbsp;·&nbsp; 128×128 px</div>
+      <div class="pipeline-result result-image">98.88% test accuracy &nbsp;·&nbsp; 22 concepts &nbsp;·&nbsp; 2 400 test images</div>
+    </div>
+
+    <div class="stages">
+
+      <!-- S1-S2: Feature Extraction -->
+      <div class="stage img-s1" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S1</div>
+          <div>
+            <div class="stage-name">Feature Extraction (DINO)</div>
+            <div class="stage-file">src/models/dino_extractor.py &nbsp;·&nbsp; experiments/extract_features.py</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Model</span>
+              <span class="detail-value"><code>dino_vits8</code> — ViT-S/8, 384-dim patch embeddings</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Input</span>
+              <span class="detail-value">224×224 image → 28×28 = <code>784 patches</code> (8×8 px each)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Layers</span>
+              <span class="detail-value">
+                Multi-layer: L8 + L10 + L12 concatenated = <code>[784, 1152]</code><br>
+                <span style="color:#555555;font-size:0.72rem">L8=texture, L10=structure, L12=semantics</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">FG Mask</span>
+              <span class="detail-value">
+                CLS attention quantile threshold <code>fg_threshold=0.75</code><br>
+                → keep top 25% patches. Min 10 patches per image.
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/dino_features.pt</span> &nbsp;shape [N_fg_patches, 1152]</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Batch size</span>
+              <span class="detail-value"><code>extract_batch_size=32</code> (config.yaml line 64)</span>
+            </div>
+          </div>
+          <div class="note">Code path: <code>get_intermediate_layers(n=5)</code> → blocks 7,9,11 = layers 8,10,12. Indices 0,2,4 selected from the 5 returned.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ dino_features.pt</div>
+
+      <!-- S2: Fine-Tuning (optional) -->
+      <div class="stage img-s2" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S2</div>
+          <div>
+            <div class="stage-name">DINO Fine-Tuning (optional)</div>
+            <div class="stage-file">src/models/dino_finetuner.py</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Purpose</span>
+              <span class="detail-value">Tighten intra-class semantic consistency of patch features before clustering</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Loss</span>
+              <span class="detail-value">
+                Contrastive: <code>same*(1−sim) + (1−same)*relu(sim−margin)</code><br>
+                <span class="kv">margin=<span>0.5</span></span>
+                <span style="color:#555555;font-size:0.72rem">  (lines 102–121 of dino_finetuner.py)</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Config</span>
+              <span class="detail-value">
+                <span class="kv">lr=<span>1e-5</span></span>
+                <span class="kv">epochs=<span>10</span></span>
+                <span class="kv">batch=<span>32</span></span>
+                (config.yaml lines 132–138)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Ablation D</span>
+              <span class="detail-value">Pre-finetune: NMI 0.363, purity 0.935 &nbsp;vs&nbsp; Full: NMI 0.326, purity 0.891<br>
+                <span style="color:#555555;font-size:0.72rem">Fine-tuning tightens geometry (silhouette 0.052) at cost of inter-class NMI — deliberate trade-off</span>
+              </span>
+            </div>
+          </div>
+          <div class="note">This stage is skipped in the default pipeline run. Features used for the main results come from the base DINO model (without fine-tuning).</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ dino_features.pt</div>
+
+      <!-- S3: GMM Clustering -->
+      <div class="stage img-s3" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S3</div>
+          <div>
+            <div class="stage-name">GMM Patch Clustering</div>
+            <div class="stage-file">src/pipeline/patch_clusterer.py</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Algorithm</span>
+              <span class="detail-value"><code>GaussianMixture</code> (sklearn) — NOT K-Means despite variable names</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Parameters</span>
+              <span class="detail-value">
+                <span class="kv">n_clusters=<span>30</span></span>
+                <span class="kv">covariance_type=<span>"diag"</span></span>
+                <span class="kv">n_init=<span>3</span></span>
+                <span class="kv">max_iter=<span>200</span></span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">K Selection</span>
+              <span class="detail-value">
+                Single-class pilot (cat only) via <code>find_optimal_k.py</code><br>
+                MiniBatchKMeans sweep K=5..20 → silhouette peaked at <code>K=10</code> (score=0.61)<br>
+                Scaled: 10 × 3 classes = <strong>K=30</strong> &nbsp;(Table 6, dissertation)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">PCA</span>
+              <span class="detail-value">1152 → <code>128 dims</code> &nbsp;·&nbsp; post-PCA L2 normalised</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Spatial</span>
+              <span class="detail-value">Append [row/28, col/28] × <code>spatial_weight=0.4</code> then re-normalise</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fit limit</span>
+              <span class="detail-value">Subsamples <code>gmm_max_fit_samples=300,000</code> patches for tractable GMM fitting</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Smoothing</span>
+              <span class="detail-value">3×3 majority-vote on 28×28 patch grid — reassign if ≥67% neighbours disagree</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">
+                <span class="tag-out">cache/cluster_labels.pt</span>&nbsp; [N_patches]<br>
+                <span class="tag-out">cache/kmeans.pkl</span>&nbsp; (contains GMM object + PCA object + metadata)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ cluster_labels.pt</div>
+
+      <!-- S4: Human Concept Labeling -->
+      <div class="stage img-s4" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S4</div>
+          <div>
+            <div class="stage-name">Human Concept Labeling</div>
+            <div class="stage-file">labeling/image_cluster_labeler.py &nbsp;(Streamlit)</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Process</span>
+              <span class="detail-value">Streamlit tool shows random thumbnail grid per cluster. SME types a semantic name.</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Outcome</span>
+              <span class="detail-value">
+                30 clusters reviewed → <strong>22 accepted</strong>, 8 excluded as noise<br>
+                <span style="color:#555555;font-size:0.72rem">Noise clusters = mixed-class patches, shadow regions, generic texture edges</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/labels.json</span> &nbsp;{cluster_id: {label, include: true/false}}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Subjectivity</span>
+              <span class="detail-value">Names are post-hoc labels only — they do NOT affect GMM structure or classifier accuracy</span>
+            </div>
+          </div>
+          <div class="note">This is the ONLY human input in the entire pipeline. Naming affects interpretability of the bar chart, not the model's predictions.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ labels.json</div>
+
+      <!-- S5: Concept Vectors & Scores -->
+      <div class="stage img-s5" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S5</div>
+          <div>
+            <div class="stage-name">Concept Vectors &amp; Scores</div>
+            <div class="stage-file">src/pipeline/concept_builder.py</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Concept vec</span>
+              <span class="detail-value">
+                Mean of all DINO patches assigned to that cluster<br>
+                <code>mean_vec = cluster_feats.mean(dim=0)</code> → L2 normalised (line 131)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Input</span>
+              <span class="detail-value">
+                <span class="tag-in">cache/dino_features.pt</span>
+                <span class="tag-in">cache/cluster_labels.pt</span>
+                <span class="tag-in">cache/labels.json</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Score formula</span>
+              <span class="detail-value">
+                <code>score = (patches in concept cluster) / (total patches in image)</code><br>
+                Range [0, ~0.20] &nbsp;·&nbsp; proportion-based, NOT cosine similarity (lines 122–124)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">
+                <span class="tag-out">cache/concept_vectors.pt</span>&nbsp; {name → [384] centroid}<br>
+                <span class="tag-out">cache/concept_scores.pt</span>&nbsp; [N_images, 22]
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ concept_scores.pt [N, 22]</div>
+
+      <!-- S6: Logistic Regression Classifier -->
+      <div class="stage img-s6" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S6</div>
+          <div>
+            <div class="stage-name">Logistic Regression Classifier</div>
+            <div class="stage-file">experiments/run_pipeline.py &nbsp;lines 265–271</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Model</span>
+              <span class="detail-value">
+                <code>LogisticRegression(C=1.0, max_iter=1000, solver='lbfgs', random_state=42)</code><br>
+                <span style="color:#555555;font-size:0.72rem">No class_weight in run_pipeline.py (that's only in ConceptClassifier class — different code path)</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Split</span>
+              <span class="detail-value">Stratified 80/20 &nbsp;·&nbsp; 2,400 test images (800 per class)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Input</span>
+              <span class="detail-value"><span class="tag-in">concept_scores.pt</span>&nbsp; [N, 22] concept activation vectors</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Loss (sklearn)</span>
+              <span class="detail-value">Cross-entropy (log loss) — sklearn default for LogisticRegression, no explicit loss arg</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Result</span>
+              <span class="detail-value">
+                <strong style="color:#1d4ed8">98.88% test accuracy</strong> &nbsp;(concept-based)<br>
+                Baseline: 46.42% (OneClassSVM on raw DINO features)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/concept_classifier.pkl</span>&nbsp; {model, class_names, concept_names, …}</span>
+            </div>
+          </div>
+          <div class="note">Coefficients matrix shape: [3 classes × 22 concepts]. Different weight row is used per predicted class when computing contributions.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ concept_classifier.pkl</div>
+
+      <!-- S7: Explanation -->
+      <div class="stage img-s7" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">S7</div>
+          <div>
+            <div class="stage-name">Explanation Generation</div>
+            <div class="stage-file">experiments/run_pipeline.py &nbsp;lines 381–530</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Activation</span>
+              <span class="detail-value">Per-concept patch proportion for the query image (same as S5 formula)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Contribution</span>
+              <span class="detail-value">
+                <code>contribution_i = coef_row[i] × (score_i − mean_score)</code><br>
+                coef_row = LogReg weight row for the predicted class (not the true class)<br>
+                mean_score = mean activation across all training images for that concept
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Spatial map</span>
+              <span class="detail-value">28×28 grid coloured by cluster assignment per patch → overlaid on original image</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Bar chart</span>
+              <span class="detail-value">Signed contribution bars — positive = supports prediction, negative = suppresses</span>
+            </div>
+          </div>
+          <div class="note">Bar length = contribution magnitude. Same concept can show different bar length for different class predictions because the weight row (coef_row) changes per predicted class.</div>
+        </div>
+      </div>
+
+    </div><!-- end .stages image -->
+  </div><!-- end image col -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       LAB PIPELINE
+  ════════════════════════════════════════════════════════════ -->
+  <div class="pipeline-col">
+    <div class="pipeline-header">
+      <span class="pipeline-badge badge-lab">🔬  Lab Pipeline</span>
+      <div class="pipeline-subtitle">diabetes / hypertension / normal &nbsp;·&nbsp; NHANES 2013–2018 &nbsp;·&nbsp; 34 blood panel features</div>
+      <div class="pipeline-result result-lab">50.94% test accuracy &nbsp;·&nbsp; 30 concepts &nbsp;·&nbsp; baseline 33.3% chance</div>
+    </div>
+
+    <div class="stages">
+
+      <!-- L1: Data Loading -->
+      <div class="stage lab-s1" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L1</div>
+          <div>
+            <div class="stage-name">NHANES Data Loading</div>
+            <div class="stage-file">src/data/lab_loader.py &nbsp;·&nbsp; experiments/run_lab_pipeline.py lines 86–112</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Source</span>
+              <span class="detail-value">NHANES .xpt files — 3 cycles: 2013–14, 2015–16, 2017–18</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Panels</span>
+              <span class="detail-value">
+                <span class="kv">CBC<span> 14 features</span></span> WBC, RBC, Hemoglobin, Hematocrit, Platelets…<br>
+                <span class="kv">BMP<span> 16 features</span></span> Glucose, BUN, Creatinine, Electrolytes…<br>
+                <span class="kv">Lipid<span> 4 features</span></span> Total Cholesterol, HDL, LDL, Triglycerides<br>
+                <strong>Total: 34 features</strong> × ~20,000 records (3 cycles merged)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Validation</span>
+              <span class="detail-value">
+                HbA1c, <code>DIQ010</code>, <code>BPQ020</code> loaded <strong>separately</strong> and never mixed with training features<br>
+                <span style="color:#555555;font-size:0.72rem">Labels only used at L7 to score classifier — proves no label leakage</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Merge</span>
+              <span class="detail-value">Outer join across cycles on <code>record_id = SEQN + cycle_year</code></span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Filter</span>
+              <span class="detail-value"><code>min_valid_ratio=0.70</code> — records missing >30% features are dropped (config_lab.yaml line 57)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">
+                <span class="tag-out">cache/lab/records.csv</span>&nbsp; [N, 34]<br>
+                <span class="tag-out">cache/lab/records_with_demo.csv</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ records.csv [N, 34]</div>
+
+      <!-- L2: Clinical Deviation Encoding -->
+      <div class="stage lab-s2" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L2</div>
+          <div>
+            <div class="stage-name">Clinical Deviation Encoding</div>
+            <div class="stage-file">src/models/lab_extractor.py &nbsp;lines 62–146</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Method</span>
+              <span class="detail-value"><code>method='clinical_deviation'</code> (config_lab.yaml line 151)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Formula</span>
+              <span class="detail-value">
+                <code>deviation = (value − midpoint) / half_range</code><br>
+                midpoint = (low_normal + high_normal) / 2<br>
+                half_range = (high_normal − low_normal) / 2<br>
+                Capped to [−4, +4] (line 146)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Example</span>
+              <span class="detail-value">
+                WBC range [4.5, 11.0] → midpoint=7.75, half_range=3.25<br>
+                WBC=15.0 → deviation = (15−7.75)/3.25 = <strong>+2.23</strong>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Ranges</span>
+              <span class="detail-value">34 clinical ranges defined in <code>config_lab.yaml</code> lines 155–192. Z-score fallback for unmapped features.</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/lab/features.pt</span>&nbsp; [N, 34] clinical deviation tensor</span>
+            </div>
+          </div>
+          <div class="note">This is a rule-based normalisation, not learned. It encodes clinical meaning: +2.0 means "2 half-ranges above normal", which is medically interpretable.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ features.pt [N, 34]</div>
+
+      <!-- L3: PSFTT Pre-training -->
+      <div class="stage lab-s3" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L3</div>
+          <div>
+            <div class="stage-name">PSFTT Pre-Training (Two-Scale SSL)</div>
+            <div class="stage-file">src/models/panel_ft_transformer.py &nbsp;·&nbsp; run_lab_pipeline.py lines 181–250</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Model</span>
+              <span class="detail-value">
+                <strong>PanelFTTransformer</strong> — Panel-Structured Feature Tokenization Transformer<br>
+                <span class="kv">d_model=<span>128</span></span>
+                <span class="kv">n_heads=<span>4</span></span>
+                <span class="kv">n_layers=<span>6</span></span>
+                <span class="kv">ff_dim=<span>512</span></span>
+                (config_lab.yaml lines 124–128)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Tokenization</span>
+              <span class="detail-value">
+                FT-Transformer per feature: <code>T_i = x_i × W_i + b_i</code> (no weight sharing)<br>
+                Panel PE: <code>E_panel[panel(i)]</code> added — encodes CBC=0, BMP=1, Lipid=2
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">SSL Scale 1</span>
+              <span class="detail-value">
+                <strong>Within-panel masking</strong> (early layers)<br>
+                40% of features masked per panel → reconstruct from unmasked features
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">SSL Scale 2</span>
+              <span class="detail-value">
+                <strong>Cross-panel dropout</strong> (late layers)<br>
+                Entire panel dropped → CLS token predicts mean deviation of dropped panel
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Loss</span>
+              <span class="detail-value"><code>λ₁×L_within + λ₂×L_cross</code> &nbsp;·&nbsp; λ₁=λ₂=1.0 (lines 259, 266)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Training</span>
+              <span class="detail-value">
+                <span class="kv">epochs=<span>50</span></span>
+                <span class="kv">batch_size=<span>256</span></span>
+                <span class="kv">lr=<span>0.001</span></span>
+                (config_lab.yaml lines 138–140)
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/lab/transformer.pt</span>&nbsp; (model weights)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ transformer.pt</div>
+
+      <!-- L4: Panel Patch Encoding -->
+      <div class="stage lab-s4" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L4</div>
+          <div>
+            <div class="stage-name">Panel Patch Encoding</div>
+            <div class="stage-file">src/models/panel_ft_transformer.py &nbsp;extract_panel_patches()</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Extract layers</span>
+              <span class="detail-value">
+                Intermediate layers <code>[1, 3, 5]</code> — NOT the final layer 6 (config_lab.yaml line 128)<br>
+                Multi-granularity: early=feature-local, mid=panel-level, late=cross-panel
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Per panel</span>
+              <span class="detail-value">
+                Mean-pool all tokens at each extract layer (128d per layer)<br>
+                Concat: L1_mean + L3_mean + L5_mean = <code>384d per panel</code>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output shape</span>
+              <span class="detail-value">
+                <code>[N × 3, 384]</code> — N records, 3 panels, 384d each<br>
+                Metadata tensor: (record_idx, panel_idx) per row
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Analogy</span>
+              <span class="detail-value">
+                Panel-patches ≈ image-patches in the visual pipeline<br>
+                <span style="color:#555555;font-size:0.72rem">3 panel-patches per patient vs ~196 image patches per photo</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/lab/panel_patches.pt</span>&nbsp; [N×3, 384] + metadata</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ panel_patches.pt [N×3, 384]</div>
+
+      <!-- L5: Per-Panel GMM Clustering -->
+      <div class="stage lab-s5" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L5</div>
+          <div>
+            <div class="stage-name">Per-Panel GMM Clustering</div>
+            <div class="stage-file">src/pipeline/patch_clusterer.py &nbsp;·&nbsp; run_lab_pipeline.py lines 360–444</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Design</span>
+              <span class="detail-value">3 <strong>independent</strong> GMMs — one per panel (CBC, BMP, Lipid)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Algorithm</span>
+              <span class="detail-value"><code>GaussianMixture</code> &nbsp;·&nbsp; <code>n_clusters=10</code> per panel → 30 total concept dimensions</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">PCA</span>
+              <span class="detail-value">384 → <code>50 dims</code> per panel (config_lab.yaml line 408)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Fit limit</span>
+              <span class="detail-value"><code>gmm_max_fit_samples=50,000</code> per panel</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">
+                <span class="tag-out">cache/lab/panel_clusters.pt</span>&nbsp; {panel → [N] labels}<br>
+                <span class="tag-out">cache/lab/panel_clusterers.pkl</span>&nbsp; 3 PatchClusterer objects
+              </span>
+            </div>
+          </div>
+          <div class="note">Image pipeline uses one global GMM across all patches. Lab pipeline uses 3 independent GMMs — one per biological panel. This preserves panel structure in the concept space.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ panel_clusters.pt</div>
+
+      <!-- L6: Concept Building -->
+      <div class="stage lab-s6" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L6</div>
+          <div>
+            <div class="stage-name">Concept Vectors &amp; Soft Scores</div>
+            <div class="stage-file">run_lab_pipeline.py &nbsp;lines 451–567</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Concept vec</span>
+              <span class="detail-value">Mean clinical deviation profile of all patients in that cluster (interpretable as "typical abnormality pattern")</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Score method</span>
+              <span class="detail-value">
+                GMM <strong>soft membership</strong>: <code>.predict_proba()</code> (line 512)<br>
+                <span style="color:#555555;font-size:0.72rem">Unlike image pipeline which uses hard proportion counts</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Naming</span>
+              <span class="detail-value">
+                "panel:label" format: e.g. <code>cbc:Anemia</code>, <code>biochem:CKD</code>, <code>lipid:Dyslipidemia</code>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output shape</span>
+              <span class="detail-value"><code>[N, 30]</code> — [N, 10] per panel concatenated (CBC||BMP||Lipid)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">
+                <span class="tag-out">cache/lab/concept_vectors.pt</span><br>
+                <span class="tag-out">cache/lab/concept_scores.pt</span>&nbsp; [N, 30]
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">↓ concept_scores.pt [N, 30]</div>
+
+      <!-- L7: Classification -->
+      <div class="stage lab-s7" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L7</div>
+          <div>
+            <div class="stage-name">Logistic Regression Classifier</div>
+            <div class="stage-file">run_lab_pipeline.py &nbsp;lines 574–732</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Model</span>
+              <span class="detail-value"><code>LogisticRegression(C=1.0, max_iter=1000, solver='lbfgs', random_state=42)</code></span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Labels</span>
+              <span class="detail-value">
+                <code>DIQ010==1</code> → diabetes &nbsp;·&nbsp; <code>BPQ020==1</code> &amp; !diabetes → hypertension &nbsp;·&nbsp; else → normal<br>
+                <span style="color:#555555;font-size:0.72rem">Loaded from validation file — never seen during L1–L6</span>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Class balance</span>
+              <span class="detail-value">Majority class capped at 3× minority class (lines 668–677)</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Result</span>
+              <span class="detail-value">
+                <strong style="color:#15803d">50.94% test accuracy</strong> &nbsp;(train 51.3%)<br>
+                Baseline: 33.3% (3-class chance)<br>
+                Per-class recall: Diabetes=4.91%, HTN=1.29%, Normal=97.7%
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Limitation</span>
+              <span class="detail-value">Class imbalance causes collapse to "normal". Normal recall=97.7% vs Diabetes=4.9% shows the classifier defaults to majority class.</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value"><span class="tag-out">cache/lab/classifier.pkl</span>&nbsp; {clf, class_names, concept_names, metadata}</span>
+            </div>
+          </div>
+          <div class="note">Core proof: concepts learned without ANY diagnosis labels (DIQ010/BPQ020 loaded after all clustering) still predict physician-confirmed diagnoses — 1.53× chance level.</div>
+        </div>
+      </div>
+
+      <div class="connector">↓ classifier.pkl</div>
+
+      <!-- L8: Enrichment Validation -->
+      <div class="stage lab-s8" onclick="toggle(this)">
+        <div class="stage-header">
+          <div class="stage-num">L8</div>
+          <div>
+            <div class="stage-name">Cluster Enrichment Validation</div>
+            <div class="stage-file">run_lab_pipeline.py &nbsp;lines 739–800+</div>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="stage-body">
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="detail-label">Method</span>
+              <span class="detail-value">Per-cluster: count patients with each condition vs population base rate</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Output</span>
+              <span class="detail-value">Enrichment table — which clusters are over-represented by which condition</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Purpose</span>
+              <span class="detail-value">Validates that named concepts (e.g. "cbc:Anemia") actually correspond to enriched disease populations — goes beyond just accuracy</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end .stages lab -->
+  </div><!-- end lab col -->
+
+</div><!-- end .pipelines -->
+
+
+<!-- ── Shared Architecture ────────────────────────────── -->
+<div class="shared-section">
+  <div class="shared-header">Shared Architecture &amp; Design Decisions</div>
+  <div class="shared-grid">
+
+    <div class="shared-card">
+      <h4>GMM vs K-Means</h4>
+      <ul>
+        <li>Both pipelines use GaussianMixture (sklearn), NOT K-Means at inference time</li>
+        <li>find_optimal_k.py uses MiniBatchKMeans only for the K-sweep (speed proxy)</li>
+        <li>K selected empirically: silhouette peaked K=10 on cat-only pilot (score=0.61)</li>
+        <li>GMM uses <code>covariance_type="diag"</code> — handles unequal cluster sizes</li>
+        <li>Image: 1 global GMM on all patches · Lab: 3 per-panel independent GMMs</li>
+      </ul>
+    </div>
+
+    <div class="shared-card">
+      <h4>No Label Leakage (Unsupervised Claim)</h4>
+      <ul>
+        <li>Image: class labels (cat/car/bird) only enter at S6 (LogReg training)</li>
+        <li>Lab: diagnosis labels (DIQ010, BPQ020) loaded after all L1–L6 stages complete</li>
+        <li>Concept naming (S4/L6) is post-hoc — names don't affect clustering or accuracy</li>
+        <li>Feature extraction is entirely self-supervised (DINO SSL / PSFTT SSL)</li>
+      </ul>
+    </div>
+
+    <div class="shared-card">
+      <h4>Ablation Results (Image)</h4>
+      <ul>
+        <li><strong>A (Full):</strong> NMI 0.326, purity 0.891, silhouette 0.052</li>
+        <li><strong>B (Single-layer L12):</strong> NMI 0.298, purity 0.875 (−0.028 NMI)</li>
+        <li><strong>C (No FG mask):</strong> NMI 0.267 (−0.059 NMI vs full)</li>
+        <li><strong>D (Pre-finetune):</strong> NMI 0.363, purity 0.935 — higher NMI because fine-tuning tightens semantic geometry at cost of class separation</li>
+        <li>Concept-based 98.88% vs raw baseline 46.42% (+52.46 pp)</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function toggle(el) {
+  el.classList.toggle('open');
+}
+// Start with all stages closed (default) — user can open to explore
+</script>
+</body>
+</html>

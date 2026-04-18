@@ -38,19 +38,29 @@ Claims **NOT yet verified** (removed from dissertation pending evidence):
 ```bash
 pip install -r requirements.txt
 
-# Generate all dissertation result JSON files (Priorities 1–4)
+# Regenerate JSON under cache/ (dissertation tables / figures)
 python experiments/generate_dissertation_results.py
 
-# Skip the slow 10 GB DINO load (Priority 1) if already done
+# Skip the slow DINO load if Stage 5 already ran
 python experiments/generate_dissertation_results.py --skip-stage5
 
-# After manually evaluating 50 random patches in the Streamlit labeller:
+# After you score patches in the Streamlit labeller:
 python experiments/generate_dissertation_results.py --write-semantic-eval 41
 ```
 
 ---
 
 ## Phase 1 — Image Pipeline (cat / car / bird)
+
+**Image files are not in Git** (`/data` is ignored). Download curated cat / car / bird images into the layout expected by `configs/config.yaml` (`data/v2/images/train/{cat,car,bird}/`) using HuggingFace datasets:
+
+```bash
+# Requires: pip install -r requirements.txt (includes `datasets`)
+# ~4k images/class matches the thesis risk-register; increase --num_images if you want more.
+python src/data/prepare_data.py --output_dir data/v2/images --num_images 4000
+```
+
+Then run the pipeline stages below.
 
 Run stages in order (first time):
 
@@ -61,6 +71,8 @@ python experiments/run_pipeline.py --stage extract
 
 # S3: Cluster patches into 30 semantic parts via GMM
 python experiments/run_pipeline.py --stage cluster
+# Note: every `extract` run wipes cluster outputs — if you re-ran extract after clustering,
+#       run `cluster` again before Streamlit (check: ls cache/cluster_labels.pt cache/kmeans.pkl).
 
 # S4 (optional): Fine-tune last 2 DINO blocks to improve cluster separation
 python experiments/run_pipeline.py --stage finetune
@@ -99,16 +111,28 @@ Ablation results are saved to `cache/ablation/ablation_results.json`.
 
 ## Phase 2 — Lab Pipeline (diabetes / hypertension / normal)
 
-Data source: **NHANES 2017–2018** (CDC public dataset, 1,536 records, 34 lab tests across 3 panels).
+NHANES 2013–2018 (three cycles, configured in `configs/config_lab.yaml`): roughly 18k+ rows and 34 lab features across CBC, biochem, and lipid panels. The CDC `.xpt` files stay on your machine — they are not in this repo.
+
+Rough order:
+
+1. Print curl lines for every file the loader expects:
+   ```bash
+   python experiments/run_lab_pipeline.py --stage download
+   ```
+2. Run those curls (from a network) so `data/lab_samples/` fills up with the right `.xpt` names.
+3. Merge into CSV/cache:
+   ```bash
+   python experiments/run_lab_pipeline.py --stage load
+   ```
+4. Full stack:
+   ```bash
+   python experiments/run_lab_pipeline.py --stage all
+   ```
+
+**Incomplete downloads:** If you only grabbed some files (wrong names, one cycle, or e.g. only files starting with `P_`), `load` will fail until the names under `lab_data.data_dir` match what `config_lab.yaml` lists — or you edit that config to list fewer cycles/files. The dissertation run used the full set of panel files plus GHB, DIQ, and BPQ per cycle.
 
 ```bash
-# Download NHANES XPT files first:
-python experiments/run_lab_pipeline.py --stage download
-
-# Run entire pipeline end-to-end:
-python experiments/run_lab_pipeline.py --stage all
-
-# Or run individual stages:
+# Or run individual stages (after `load` has succeeded):
 python experiments/run_lab_pipeline.py --stage load      # L1: merge XPT panels
 python experiments/run_lab_pipeline.py --stage extract   # L2: clinical deviation encoding
 python experiments/run_lab_pipeline.py --stage pretrain  # L3: two-scale SSL (50 epochs)
@@ -188,7 +212,7 @@ cache/                        Generated artefacts (gitignored except JSON result
 |---|---|---|
 | `dino.model` | `dino_vits8` | ViT-S/8, 21M params, 384-dim patch features |
 | `dino.use_multilayer` | `true` | Concat L8+L10+L12 → 1152d per patch |
-| `dino.fg_threshold` | `0.5` | Keep top 50% CLS-attended patches |
+| `dino.fg_threshold` | `0.75` (typical) | Quantile on CLS attention; e.g. 0.75 ≈ keep top ~25% patches |
 | `clustering.n_clusters` | `30` | 10 per class (cat/car/bird) |
 | `clustering.method` | `gmm` | GMM handles unequal part sizes |
 | `clustering.use_pca` | `true` | 1152 → 128d before clustering |

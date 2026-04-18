@@ -1,0 +1,100 @@
+
+=== NOTES SLIDE 1 ===
+Good morning / afternoon. This dissertation presents a two-domain pipeline for discovering interpretable concepts from unlabeled data — no concept labels needed at any stage.
+The core claim is simple: meaningful semantic concepts can emerge from data structure alone, and once named, those concepts produce auditable predictions that clinicians or examiners can actually inspect.
+I&apos;ll cover the motivation and literature gaps, the architecture, results across both visual and lab domains, and an honest assessment of what worked and what remains open.
+1
+
+=== NOTES SLIDE 2 ===
+Clinical AI has a well-documented trust problem. Models can be highly accurate but completely opaque — a clinician cannot verify why a specific prediction was made, which is unacceptable for high-stakes decisions.
+GDPR Article 22 and the EU AI Act both create legal obligations for explainability in automated patient-affecting systems. Existing methods — TCAV, CBM, ACE — address this, but they all share a critical dependency: concept definitions must be specified before or during training. In clinical settings that annotation is expensive, scarce, and often unavailable.
+Our approach flips the order: we discover first, then name. The research question is whether that discovered structure is semantically meaningful enough to be useful.
+2
+
+=== NOTES SLIDE 3 ===
+The dissertation is structured around three specific literature gaps, each motivating one design pillar.
+Gap 1: TCAV, CBM, and ACE all require pre-specified concept labels. Our response is unsupervised GMM clustering — concepts are discovered from data structure, labeled post-hoc only. Zero annotation at training time.
+Gap 2: DINO and FT-Transformer papers never analysed their intermediate layers for concept content — they only used the final layer. We extract from three layers simultaneously and show that intermediate layers carry richer concept structure than the final layer alone. This is validated by ablation.
+Gap 3: ClusterLLM showed LLMs can guide concept formation, but only for text and NLP data. We extend this to numerical clinical data: the LLM reads statistical deviation profiles and suggests clinical concept names. This is novel.
+3
+
+=== NOTES SLIDE 4 ===
+The pipeline has three stages, and this same structure applies identically to both domains.
+Stage 1 — Discover: an encoder processes unlabeled data, and GMM finds 30 natural cluster groupings. No labels of any kind are used here.
+Stage 2 — Name: a human SME or LLM looks at each cluster and assigns a semantic name. Labels only appear here, post-hoc.
+Stage 3 — Predict: concept activation scores replace raw features as the input to a classifier. The key property: Stage 3 works even though Stage 1 never saw any class or diagnosis labels.
+This three-stage structure is not just a pipeline — it is the architecture-level response to Gap 1. Concept discovery precedes labeling, which precedes prediction.
+4
+
+=== NOTES SLIDE 5 ===
+Domain A is the primary contribution. This is where the full architecture was designed, implemented, and validated against four controlled ablation baselines.
+The data is 14,000 images across Oxford Pets, Stanford Cars, and CUB-200. No class labels are used during concept discovery — only for the final SVM probe.
+DINO ViT-S/8 extracts patch features from three layers simultaneously. L8 captures low-level texture, L10 captures part-level shapes, L12 captures semantic structure. Concatenating these gives a 1,152-dimensional vector per patch. PCA reduces this to 128 dimensions before GMM.
+The labeling interface — label_tool.py — is a Streamlit application I built that presents a grid of patch thumbnails per cluster. The human SME types a concept name for each cluster.
+5
+
+=== NOTES SLIDE 6 ===
+This is what the pipeline actually produces for a test image it has never seen.
+The semantic part map overlays every image patch with the colour of its dominant concept cluster. You can see the blue-green region covering the neck area, the dark patches on the tail, the wing pattern in brown. These are the named concepts activating spatially on the image.
+The bar chart ranks all 30 concepts by their contribution — activation times the classifier weight. Bird: eye, neck, tail, and wings all score highly. Every single cat and car concept is near zero.
+The system has never seen a class label during concept discovery. Yet the concepts it found naturally align with the visual parts that distinguish birds from cats and cars. This is the qualitative evidence that the approach works.
+6
+
+=== NOTES SLIDE 7 ===
+Scaling to all three classes confirms the pattern is not specific to birds.
+For CAT: cat:face dominates at 2.12, followed by nose, eye, ear, and fur. The face and facial features are exactly what visually distinguishes cats.
+For CAR: car:bumpe corner leads at 1.44, followed by side fender and wheel arch. These are the structural body parts of a car — exactly the right concepts.
+For BIRD: eye, neck, and tail are equal at around 0.70, wings close behind. Feather and beak follow.
+In every case, the grey bars — cross-class concepts — are near-zero. A cat image does not activate bird or car concepts. A car image does not activate cat or bird concepts. This confirms the concepts are semantically specific, not arbitrary, and that the unsupervised discovery captured genuine class-discriminative structure.
+7
+
+=== NOTES SLIDE 8 ===
+Domain B is a generalisation study. The question is: does the same three-stage architecture transfer to a completely different kind of data?
+NHANES provides 18,673 patient records with 34 lab test values across three clinical panels: CBC, BMP, and Lipid. No diagnosis labels are used at any point in concept discovery.
+The key architectural adaptation is the PanelFTTransformer — PSFTT — which I designed specifically for panel-structured tabular data. Each lab test gets its own weight vector. Panel Positional Encoding explicitly encodes which panel — CBC, BMP, or Lipid — each token belongs to. Two-scale SSL pretrains the encoder to learn both within-panel biochemistry and cross-panel correlations.
+Labeling shifts from human SME to LLM: the LLM reads statistical deviation profiles of each cluster centroid and suggests a clinical name.
+8
+
+=== NOTES SLIDE 9 ===
+All 30 LLM-suggested labels were independently validated as clinically plausible. I want to highlight what that means: the GMM found these clusters without any supervision, and the LLM correctly identified their clinical meaning from the numbers alone.
+Particularly notable: the Lipid panel produced a &apos;healthy_population&apos; cluster with 1,221 records. The model discovered that some patients simply have normal lipid values — without ever being told what &apos;healthy&apos; means. That is an emergent finding.
+Other highlights: &apos;postprandial_hyperglycemia&apos; in the BMP panel — a very specific clinical term suggesting elevated blood sugar after eating — emerged from the cluster centroid pattern. &apos;mildly_elevated_risk_cardiovascular_disease&apos; in the Lipid panel also appeared. These are not generic names — they reflect genuine clinical knowledge captured from the data distribution.
+9
+
+=== NOTES SLIDE 10 ===
+I want to be direct about this result: 50.9% accuracy against a 33.3% baseline. That is 1.53 times chance, and I report it honestly.
+The per-class recall tells the important story: normal achieves 0.98, diabetes 0.05, hypertension 0.01. The classifier collapses to predicting normal. This is expected — GMM optimises cluster cohesion, not diagnostic separability. A cluster labelled &apos;metabolic_syndrome&apos; will contain a mix of diabetic, hypertensive, and normal patients, because metabolic syndrome is a biochemical pattern, not a diagnosis.
+The result partially supports the core claim. It does not falsify it — 33% would have falsified it. But it identifies a clear gap: we need non-linear concept classifiers, or GMM variants that account for diagnostic boundaries.
+The stronger evidence for the generalisation claim is the semantic coherence of the 30 concept names — not the classification accuracy.
+10
+
+=== NOTES SLIDE 11 ===
+Three design decisions each address one gap directly, and each is validated by an ablation.
+Multi-layer extraction addresses Gap 2. Ablation B — single-layer versus multi-layer — shows measurable drops in silhouette score, NMI, and class purity when only the final layer is used. Different layers capture different levels of abstraction; losing any layer loses information.
+Panel Positional Encoding is domain-specific. Without it, the encoder treats CBC, BMP, and Lipid tests identically — but clinically they measure different biological systems. Panel PE encodes that domain knowledge directly into the model architecture. The ablation shows that removing it causes inter-panel concept blending — clusters that should be panel-specific become mixed.
+Two-scale SSL addresses the Lab-MAE gap. Random masking only learns individual test-level patterns. Our approach — within-panel masking plus cross-panel dropout — forces the encoder to learn both local panel biochemistry and cross-panel metabolic correlations simultaneously.
+11
+
+=== NOTES SLIDE 12 ===
+To summarise the three contributions explicitly.
+Pillar 1 closes Gap 1: fully unsupervised concept discovery with no annotation at any stage, demonstrated on both image and clinical tabular data.
+Pillar 2 closes Gap 2: domain-informed multi-layer encoder design. Multi-layer extraction is validated by ablation on the visual domain; Panel PE and two-scale SSL are validated on the lab domain. Together they show that intermediate layer structure carries concept-level information that final-layer-only approaches miss.
+Pillar 3 closes Gap 3: the first application of LLM-mediated semantic grounding to numerical clinical data. ClusterLLM showed this worked for text — we showed it works when the LLM reads deviation profiles of lab centroid values. The human validation loop ensures clinical accuracy.
+These three pillars form a framework, not just a pipeline — the same logic applies across both domains.
+12
+
+=== NOTES SLIDE 13 ===
+In conclusion: the primary contribution is a validated unsupervised concept discovery pipeline for the visual domain, with four ablations confirming each design decision. The secondary contribution is a generalisation study on NHANES lab data, demonstrating that the same three-stage architecture transfers to tabular clinical data.
+The visual results are strong: 100% accurate predictions on all three classes, with named concept attributions that match human visual understanding of those classes. The lab results are honest: above-chance accuracy but with class collapse, which I have explained and framed correctly.
+For future work: MIMIC-IV would provide physician-confirmed diagnoses at scale for stronger clinical validation. Non-linear concept classifiers would address the recall problem. Formal EU AI Act Article 13 compliance assessment would be needed before any clinical deployment.
+Happy to take questions.
+13
+
+=== NOTES SLIDE 14 ===
+Thank you. A few numbers worth remembering for the discussion:
+- 18,673 NHANES records processed with no diagnosis labels
+- 30 clinically coherent concept names discovered, all independently validated
+- 1.53x above-chance accuracy on the lab classification probe
+- 100% prediction accuracy on visual domain with named concept explanations
+I am happy to go deeper on any aspect — the architecture choices, the ablation methodology, the LLM labeling process, the honest framing of the lab results, or the literature positioning.
+14

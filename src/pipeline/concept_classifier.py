@@ -345,13 +345,18 @@ def render_dissertation_explanation(
     ax2.set_xlabel("Concept contribution\n(activation × weight)", fontsize=9)
     ax2.axvline(0, color="grey", linewidth=0.8, linestyle="--")
     ax2.spines[["top", "right"]].set_visible(False)
-    pred = result["prediction"].upper()
+    pred = str(result["prediction"]).upper()
     conf = result["confidence"]
+    _title_colors = {
+        "CAT": "#1a237e",
+        "CAR": "#b71c1c",
+        "BIRD": "#1b5e20",
+    }
     ax2.set_title(
         f"Prediction: {pred}  ({conf:.0%})",
         fontsize=12,
         fontweight="bold",
-        color="#1a237e" if pred == "CAT" else "#b71c1c",
+        color=_title_colors.get(pred, "#37474f"),
     )
 
     if save_path:

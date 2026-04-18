@@ -113,7 +113,7 @@ Concatenated  → 1152d per patch
 
 This is Gap 1 in the dissertation: Caron (2021) only analysed the CLS token of the final layer. Using intermediate layers to extract part-level representations is novel.
 
-**Foreground masking**: DINO's CLS attention naturally focuses on the object. Patches are retained only if their CLS attention score exceeds the 50th percentile (`fg_threshold=0.5`). This removes background patches (sky, floor) before clustering — domain knowledge via **input representation**.
+**Foreground masking**: DINO's CLS attention tends to emphasize the object. Patches are kept when attention exceeds `quantile(fg_threshold)` (configured in `configs/config.yaml`, e.g. `fg_threshold: 0.75` → roughly the top ~25% of patches by score per image). That drops much of the background before clustering.
 
 ```
 12,000 images × 784 patches = 9,408,000 total patches

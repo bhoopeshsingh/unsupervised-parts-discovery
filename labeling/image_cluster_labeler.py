@@ -13,6 +13,8 @@ os.chdir(_PROJECT_ROOT)
 sys.path.insert(0, _PROJECT_ROOT)
 
 import io, tempfile
+from typing import List, Optional, Tuple
+
 import torch, numpy as np, json, yaml, pickle
 from pathlib import Path
 from PIL import Image
@@ -51,10 +53,49 @@ def compute_cluster_class_distribution(data, labels_arr, n_clusters):
     return dist
 
 
-def load_data(config_path='configs/config.yaml'):
-    """Load cached data."""
-    cfg  = yaml.safe_load(open(config_path))
-    data = torch.load(cfg['dino']['features_cache'], weights_only=False)
+def pipeline_cache_fingerprint(cfg: dict) -> tuple:
+    """File mtimes for caches that must stay in sync; used to invalidate Streamlit session state."""
+    paths = [
+        cfg["dino"]["features_cache"],
+        cfg["dino"].get("patch_quality_cache", "cache/patch_quality.pt"),
+        cfg["dino"].get("cluster_labels_path", "cache/cluster_labels.pt"),
+        cfg["dino"].get("clusterer_path", "cache/kmeans.pkl"),
+    ]
+    out = []
+    for p in paths:
+        pp = Path(p)
+        out.append(float(pp.stat().st_mtime) if pp.is_file() else 0.0)
+    return tuple(out)
+
+
+def sync_streamlit_cache_with_disk(cfg: dict) -> None:
+    """
+    After `extract` or `cluster`, files on disk change but Streamlit session_state
+    can still hold old `quality_cache` / `fg_scores`. Drop those when mtimes change.
+    """
+    fp = pipeline_cache_fingerprint(cfg)
+    if st.session_state.get("_pipeline_cache_fp") == fp:
+        return
+    for key in ("fg_scores", "quality_cache"):
+        st.session_state.pop(key, None)
+    st.session_state["_pipeline_cache_fp"] = fp
+
+
+def required_image_cache_paths(cfg: dict) -> List[Tuple[str, str]]:
+    """Human-readable name and path for caches needed by load_data()."""
+    d = cfg["dino"]
+    return [
+        ("DINO patch features (run --stage extract)", d["features_cache"]),
+        ("Per-patch cluster IDs (run --stage cluster)", d.get("cluster_labels_path", "cache/cluster_labels.pt")),
+        ("Fitted clusterer (run --stage cluster)", d.get("clusterer_path", "cache/kmeans.pkl")),
+    ]
+
+
+def load_data(config_path: str = "configs/config.yaml", cfg: Optional[dict] = None):
+    """Load cached data from the image pipeline."""
+    if cfg is None:
+        cfg = yaml.safe_load(open(config_path))
+    data = torch.load(cfg["dino"]["features_cache"], weights_only=False)
     cluster_labels_path = cfg['dino'].get('cluster_labels_path', 'cache/cluster_labels.pt')
     labels_arr = torch.load(cluster_labels_path, weights_only=True).numpy()
     n_clusters = cfg['clustering']['n_clusters']
@@ -343,7 +384,7 @@ def run_classify_tab(cfg):
             tmp.write(uploaded.getvalue())
             tmp_path = tmp.name
 
-        fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
+        fg_threshold = cfg["dino"].get("fg_threshold", 0.75)
         all_feats, fg_mask = extractor.extract_all_patches_with_fg_mask(
             tmp_path, fg_threshold=fg_threshold
         )
@@ -512,8 +553,34 @@ def run_streamlit():
     st.set_page_config(page_title='Parts Discovery', layout='wide')
     st.title('Unsupervised Parts Discovery')
 
+    cfg = yaml.safe_load(open("configs/config.yaml"))
+    missing = [(name, p) for name, p in required_image_cache_paths(cfg) if not Path(p).exists()]
+    if missing:
+        st.error(
+            "**Pipeline cache not found.** The labeler needs DINO features and clustering "
+            "outputs from `experiments/run_pipeline.py`."
+        )
+        st.markdown("**Missing:**")
+        for name, p in missing:
+            st.markdown(f"- {name} → `{p}`")
+        st.markdown(
+            "Generate them from the **project root** (same folder as `configs/`):\n\n"
+            "```bash\n"
+            "python experiments/run_pipeline.py --stage extract\n"
+            "python experiments/run_pipeline.py --stage cluster\n"
+            "```\n\n"
+            "**Important:** `--stage extract` **deletes** cluster outputs (`cluster_labels.pt`, "
+            "`kmeans.pkl`) before rebuilding features. If you already ran extract and only cluster "
+            "files are missing, run **`--stage cluster` again** (features must exist first).\n\n"
+            "Verify: `ls cache/dino_features.pt cache/cluster_labels.pt cache/kmeans.pkl`\n\n"
+            "Or one shot: `python experiments/run_pipeline.py --stage all` (needs `data/` images; "
+            "see README)."
+        )
+        st.stop()
+
     # Load config + data once (shared by both tabs)
-    data, labels_arr, n_clusters, cfg, cluster_centers, class_dist = load_data()
+    data, labels_arr, n_clusters, cfg, cluster_centers, class_dist = load_data(cfg=cfg)
+    sync_streamlit_cache_with_disk(cfg)
 
     tab_label, tab_classify = st.tabs(["🏷️ Label Clusters", "🔍 Classify & Explain"])
 
@@ -535,13 +602,13 @@ def run_streamlit():
             )
         fg_scores = st.session_state.fg_scores
 
-        # Load pre-computed patch quality (generated by --stage cluster)
+        # Patch quality: built during --stage extract (stage_patch_quality), not cluster
         quality_cache_path = cfg['dino'].get('patch_quality_cache', 'cache/patch_quality.pt')
         if not Path(quality_cache_path).exists():
             st.error(
                 f"Patch quality cache not found: `{quality_cache_path}`\n\n"
-                "Re-run the cluster stage to generate it:\n"
-                "```\npython experiments/run_pipeline.py --stage cluster\n```"
+                "It is written after feature extraction. Run:\n"
+                "```\npython experiments/run_pipeline.py --stage extract\n```"
             )
             st.stop()
         if 'quality_cache' not in st.session_state:

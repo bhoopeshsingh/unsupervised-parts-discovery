@@ -36,6 +36,7 @@ black>=23.0.0
 # DINO Pipeline additions
 # -----------------------------------------------------------------------------
 ipywidgets>=8.0.0
+transformers>=4.36.0   # CLIP: scripts/filter_bird_class_sitting_clip.py
 
 # Background removal (used by prepare_data.py)
 rembg>=2.0.50

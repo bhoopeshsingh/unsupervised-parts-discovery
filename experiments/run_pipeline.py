@@ -16,6 +16,7 @@ import argparse
 import os
 import sys
 
+# Allow running this script directly while still resolving imports from src/.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
@@ -29,6 +30,7 @@ from tqdm import tqdm
 
 def _clear_files(paths, reason=""):
     """Delete cache files that exist; print a summary of what was removed."""
+    # Keep cleanup idempotent: only unlink files that are currently present.
     cleared = [p for p in paths if Path(p).exists()]
     if cleared:
         tag = f" ({reason})" if reason else ""
@@ -41,6 +43,7 @@ def _clear_files(paths, reason=""):
 
 def _clusterer_siblings(clusterer_path: str):
     """Return all auto-generated files that accompany a saved clusterer."""
+    # Clusterer state is split across these artifacts and should be invalidated together.
     base = clusterer_path.replace(".pkl", "")
     return [
         clusterer_path,
@@ -120,6 +123,7 @@ def stage_cluster(cfg):
     use_smoothing = ccfg.get("use_spatial_smoothing", False)
     if use_smoothing:
         print("  Applying spatial coherence smoothing...")
+        # Smoother uses image/patch indices to enforce local spatial consistency.
         labels = clusterer.smooth_labels(
             labels,
             image_ids=data["image_ids"].numpy(),
@@ -143,7 +147,7 @@ def stage_cluster(cfg):
         reason="re-cluster invalidates labels, concept vectors, scores, and classifier",
     )
     print("\n  ⚠  Re-label clusters in the GUI before running --stage concepts:")
-    print("       streamlit run labeling/label_tool.py")
+    print("       streamlit run labeling/image_cluster_labeler.py")
 
     return clusterer, labels
 
@@ -175,6 +179,7 @@ def stage_patch_quality(cfg):
             patch_indices = np.where((data["image_ids"] == img_idx).numpy())[0]
             for global_idx in patch_indices:
                 patch_idx = data["patch_ids"][global_idx].item()
+                # 224px input with 8px patches gives a 28x28 patch lattice.
                 row_p, col_p = divmod(int(patch_idx), 28)
                 r0, c0 = row_p * 8, col_p * 8
                 patch = img_arr[r0:r0 + 8, c0:c0 + 8]
@@ -184,6 +189,7 @@ def stage_patch_quality(cfg):
                     center_dist = np.sqrt((row_p - 14) ** 2 + (col_p - 14) ** 2)
                     spatial_centrality[global_idx] = 1.0 / (1.0 + center_dist / 10.0)
         except Exception:
+            # Skip bad files and continue; a partial cache is still useful for labeling.
             continue
 
     out = {
@@ -237,6 +243,7 @@ def stage_classify(cfg):
     scores        = scores_data["scores"].numpy()          # [N, C]
     image_labels  = np.array(scores_data["image_labels"])  # [N] int
     concept_names = scores_data["concept_names"]
+    # Must stay aligned with numeric labels used in scores_data["image_labels"].
     class_names   = scores_data["class_names"]             # ['bird','car','cat']
 
     print(f"  Images      : {len(scores)}")
@@ -250,6 +257,7 @@ def stage_classify(cfg):
     X_tr, X_te, y_tr, y_te = train_test_split(
         scores, image_labels,
         test_size=test_size,
+        # Maintain per-class proportions in both splits.
         stratify=image_labels,
         random_state=cfg["classification"].get("random_seed", 42),
     )
@@ -269,8 +277,9 @@ def stage_classify(cfg):
     print()
     print(classification_report(y_te, clf.predict(X_te), target_names=class_names))
 
-    # Save — wrap with metadata so label_tool.py can load class names
+    # Save — wrap with metadata so image_cluster_labeler can load class names
     classifier_path = cfg["classification"].get("classifier_path", "cache/concept_classifier.pkl")
+    # Save metadata with the model so downstream UI/explain code can be schema-free.
     payload = {
         "clf":           clf,
         "class_names":   class_names,
@@ -373,7 +382,11 @@ def stage_explain(cfg, image_path: str):
     print("\n" + "=" * 60)
     print(f"STAGE 7: Explain prediction for {image_path}")
     print("=" * 60)
-    import json, pickle
+    import json
+    import pickle
+
+    from sklearn.linear_model import LogisticRegression
+
     from src.models.dino_extractor import DinoExtractor
     from src.pipeline.one_class_classifier import CatConceptOneClassClassifier
     from src.pipeline.concept_classifier import (
@@ -400,16 +413,20 @@ def stage_explain(cfg, image_path: str):
     classifier_path = cfg["classification"].get(
         "classifier_path", "cache/concept_classifier.pkl"
     )
-    clf = CatConceptOneClassClassifier.load(classifier_path)
+    with open(classifier_path, "rb") as f:
+        clf_payload = pickle.load(f)
+
     saved = torch.load(cfg["concepts"]["vectors_cache"], weights_only=False)
     vectors = saved["vectors"]
+    # Preserve insertion order so feature vector order matches classifier training.
     concept_names = list(vectors.keys())
-    fg_threshold = cfg["dino"].get("fg_threshold", 0.5)
+    fg_threshold = cfg["dino"].get("fg_threshold", 0.75)
 
     all_feats, fg_mask = extractor.extract_all_patches_with_fg_mask(
         image_path, fg_threshold=fg_threshold
     )
     fg_feats = all_feats[fg_mask]
+    # Keep original patch indices so concept scoring can tie back to cluster ids.
     fg_patch_ids = torch.where(fg_mask)[0]   # actual patch indices (0-783)
 
     # Load clusterer + label mapping for cluster-proportion scoring
@@ -428,27 +445,71 @@ def stage_explain(cfg, image_path: str):
         patch_ids=fg_patch_ids,
     )
 
-    score_vec = np.array([[concept_scores[c] for c in concept_names]])
-    preds, _, confs = clf.predict(score_vec)
-    explanation = clf.explain(score_vec, concept_names)
-
-    result = {
-        "prediction": preds[0],
-        "confidence": float(confs[0]),
-        "concept_scores": concept_scores,
-        "contributions": {
-            item["concept"]: item["deviation_from_cat"] for item in explanation
-        },
-    }
+    # Match stage_classify / Streamlit labeler: dict payload + LogisticRegression
+    if isinstance(clf_payload, dict) and isinstance(
+        clf_payload.get("clf"), LogisticRegression
+    ):
+        clf = clf_payload["clf"]
+        class_names = clf_payload["class_names"]
+        clf_concept_names = clf_payload["concept_names"]
+        score_vec = np.array(
+            [[concept_scores.get(c, 0.0) for c in clf_concept_names]]
+        )
+        pred_idx = int(clf.predict(score_vec)[0])
+        pred_proba = clf.predict_proba(score_vec)[0]
+        pred_label = class_names[pred_idx]
+        confidence = float(pred_proba[pred_idx])
+        coef_row = clf.coef_[pred_idx]
+        mean_score = float(score_vec[0].mean())
+        contributions = {
+            c: float(coef_row[i] * (score_vec[0][i] - mean_score))
+            for i, c in enumerate(clf_concept_names)
+        }
+        result = {
+            "prediction": pred_label,
+            "confidence": confidence,
+            "concept_scores": {
+                c: concept_scores.get(c, 0.0) for c in clf_concept_names
+            },
+            "contributions": contributions,
+        }
+    elif isinstance(clf_payload, CatConceptOneClassClassifier):
+        clf = clf_payload
+        score_vec = np.array([[concept_scores[c] for c in concept_names]])
+        preds, _, confs = clf.predict(score_vec)
+        explanation = clf.explain(score_vec, concept_names)
+        result = {
+            "prediction": preds[0],
+            "confidence": float(confs[0]),
+            "concept_scores": concept_scores,
+            "contributions": {
+                item["concept"]: item["deviation_from_cat"] for item in explanation
+            },
+        }
+    else:
+        raise TypeError(
+            f"Unsupported classifier in {classifier_path}: "
+            "expected dict with LogisticRegression or CatConceptOneClassClassifier"
+        )
 
     print(f"\nPrediction : {result['prediction']}")
     print(f"Confidence : {result['confidence']:.2%}")
     print("\nConcept Activations (sorted by strength):")
-    for c, score in sorted(concept_scores.items(), key=lambda x: x[1], reverse=True):
+    for c, score in sorted(
+        result["concept_scores"].items(), key=lambda x: x[1], reverse=True
+    ):
         bar = "█" * int(score * 20)
         print(f"  {c:20s} {score:.3f} {bar}")
 
-    concept_map, _ = get_spatial_concept_map(concept_names, vectors, all_feats)
+    # Spatial map: only concepts that have a vector in cache (same as labeler UI)
+    if isinstance(clf_payload, dict) and isinstance(
+        clf_payload.get("clf"), LogisticRegression
+    ):
+        spatial_names = [c for c in clf_concept_names if c in vectors]
+    else:
+        spatial_names = [c for c in concept_names if c in vectors]
+
+    concept_map, _ = get_spatial_concept_map(spatial_concept_names, vectors, all_feats)
 
     explanation_dir = cfg["classification"].get("explanation_dir", "cache/")
     stem = Path(image_path).stem
@@ -457,7 +518,7 @@ def stage_explain(cfg, image_path: str):
     render_dissertation_explanation(
         image_path=image_path,
         concept_map=concept_map,
-        concept_names=concept_names,
+        concept_names=spatial_names,
         result=result,
         fg_mask=fg_mask,
         save_path=dis_path,
@@ -517,12 +578,14 @@ def main():
     if args.stage in ("all", "cluster"):
         stage_cluster(cfg)
     if args.stage in ("all", "concepts"):
+        # Concept building depends on manually curated cluster labels.
         if not Path(cfg["concepts"]["labels_path"]).exists():
             print("ERROR: labels.json not found. Run labeling tool first:")
-            print("  streamlit run labeling/label_tool.py")
+            print("  streamlit run labeling/image_cluster_labeler.py")
             sys.exit(1)
         stage_concepts(cfg)
     if args.stage in ("all", "classify"):
+        # Classification consumes cached concept scores generated in stage_concepts.
         if not Path(cfg["concepts"]["scores_cache"]).exists():
             print("ERROR: concept scores not found. Run concepts stage first.")
             sys.exit(1)

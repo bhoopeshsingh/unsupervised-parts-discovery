@@ -49,7 +49,7 @@ Pillar 3 — Post-Hoc Semantic Grounding                 (answers Gap 3)
 | Extract | DINO ViT-S/8, multi-layer (L8+L10+L12), FG masking | `src/models/dino_extractor.py` | ✅ Done |
 | Fine-tune | Semantic consistency loss (last 2 blocks) | `src/models/dino_finetuner.py` | ✅ Done |
 | Cluster | GMM, 30 clusters, spatial features, PCA 1152→128 | `src/pipeline/patch_clusterer.py` | ✅ Done |
-| **Label** | **Human SME labels patch clusters via Streamlit UI** | **`labeling/label_tool.py`** | ⏳ After balanced data |
+| **Label** | **Human SME labels patch clusters via Streamlit UI** | **`labeling/image_cluster_labeler.py`** | ⏳ After balanced data |
 | Concepts | Concept vectors + per-image activation scores | `src/pipeline/concept_builder.py` | ❌ Pending labeling |
 | Classify | Concept-score-based classifier | `src/pipeline/concept_classifier.py` | ❌ Pending concepts |
 | Explain | Part map + contribution bar chart (3-panel figure) | `src/pipeline/concept_classifier.py` | ❌ Pending classify |
@@ -62,7 +62,7 @@ Pillar 3 — Post-Hoc Semantic Grounding                 (answers Gap 3)
 | **Pretrain** | **PanelFTTransformer, two-scale SSL** | **`src/models/panel_ft_transformer.py`** | ❌ Not run |
 | Encode | Panel-patches [N × 3 × 384] from layers L2/L4/L6 | `experiments/run_lab_pipeline.py` | ❌ Pending pretrain |
 | Cluster | Per-panel GMM (3 panels × 10 clusters = 30) | `experiments/run_lab_pipeline.py` | ❌ Pending encode |
-| **Label** | **LLM suggests clinical label → human validates** | **`labeling/lab_label_tool.py`** | ❌ Pending cluster |
+| **Label** | **LLM suggests clinical label → human validates** | **`labeling/lab_cluster_labeler.py`** | ❌ Pending cluster |
 | Concepts | Concept vectors + scores | `experiments/run_lab_pipeline.py` | ❌ Pending labeling |
 | Classify | Concept-based classifier | `experiments/run_lab_pipeline.py` | ❌ Pending concepts |
 
@@ -74,7 +74,7 @@ Pillar 3 — Post-Hoc Semantic Grounding                 (answers Gap 3)
 |---|---|---|---|---|
 | 1. Encoder | Domain-informed feature extraction | DINO multi-layer + PSFTT panel PE | Ablation variants B, C, D | Intermediate layers carry concept structure (Gap 2) |
 | 2. Discovery | Unsupervised clustering | GMM on patch / panel-patch features | Cluster quality metrics | Concepts found without supervision (Gap 1) |
-| 3. Grounding | Post-hoc semantic labeling | `label_tool.py` / `lab_concept_advisor.py` | LLM confidence vs shuffled baseline | Domain knowledge injected post-hoc (Gap 3) |
+| 3. Grounding | Post-hoc semantic labeling | `image_cluster_labeler.py` / `lab_concept_advisor.py` | LLM confidence vs shuffled baseline | Domain knowledge injected post-hoc (Gap 3) |
 | 4. Classification | Concept-based predictions | Concept vectors + SVM / LogReg | Accuracy: concept scores vs raw features | Interpretability without sacrificing accuracy |
 | 5. Explanation | Auditable outputs | Part map + contribution bar chart | Human can trace prediction to named concept | Supports clinical audit requirement |
 

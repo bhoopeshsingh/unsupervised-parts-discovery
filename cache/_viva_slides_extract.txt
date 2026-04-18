@@ -1,0 +1,308 @@
+
+=== SLIDE 1 ===
+Unsupervised Concept Discovery
+for Interpretable Clinical AI
+CS4700 Dissertation Viva  ·  Visual + Lab Tabular Domains
+Bhoopesh Nandan Singh
+NHANES 2013–18  ·  18,673 Records
+DINO ViT-S/8  ·  Oxford Pets  ·  CUB
+GMM Clusters  ·  LLM Concept Labeling
+
+=== SLIDE 2 ===
+The Challenge: Interpretability Gap in Clinical AI
+Black-box models cannot be safely deployed in clinical settings without auditability
+Why Existing Approaches Fall Short
+Clinicians cannot verify why a prediction was made — critical in high-stakes decisions
+GDPR Article 22 &amp; EU AI Act require explanations for automated patient decisions
+TCAV, CBM, ACE all require concept labels defined BEFORE or DURING training
+Clinical concept annotation is expensive and rarely available at training time
+Research Question
+&quot;Can we discover clinically meaningful concepts from unlabeled data — and use them to make interpretable, auditable predictions?&quot;
+Our Promise
+Zero concept labels needed at training time
+Semantically named, clinically coherent concepts
+Fully auditable prediction paths per patient
+
+=== SLIDE 3 ===
+Three Literature Gaps This Work Addresses
+Each gap maps directly to one of three design pillars — motivation is literature-grounded
+Gap 1
+Paper(s):
+TCAV (Kim, ICML 2018)
+CBM (Koh, ICML 2020)
+ACE (Ghassemi, 2021)
+Their Limitation:
+Concept labels required before / during training. Pre-defined segmentation assumed.
+Our Response:
+GMM clustering discovers concepts unsupervised — labels applied post-hoc only. Zero annotation at training time.
+Gap 2
+Paper(s):
+DINO (Caron, NeurIPS 2021)
+FT-Transformer (Gorishniy, NeurIPS 2021)
+Their Limitation:
+Intermediate layer representations never analyzed for concept content.
+Our Response:
+Multi-layer extraction: concat(L8,L10,L12) for image; concat(L2,L4,L6) for lab. First to show concept structure in intermediate layers.
+Gap 3
+Paper(s):
+ClusterLLM (EMNLP 2023)
+Lab-MAE (CHIL 2025)
+Their Limitation:
+LLM concept guidance restricted to textual/NLP data only.
+Our Response:
+LLM reads numerical deviation profiles of cluster centroids, suggests clinical labels. Human validates. Bridges statistics and semantics for numerical data.
+
+=== SLIDE 4 ===
+Our Solution: A Three-Stage Unsupervised-First Pipeline
+The identical structure applied to both domains: Visual (DINO) and Tabular/Lab (PSFTT)
+Stage 1
+DISCOVER
+Encoder extracts features from
+unlabeled data · GMM finds
+30 natural clusters
+Stage 2
+NAME
+LLM reads cluster centroid
+deviation profiles · Human
+validates clinical labels
+Stage 3
+PREDICT
+Concept scores become
+interpretable features · Classifier
+gives auditable predictions
+No supervision at any stage
+Zero annotation at training time
+Named, auditable predictions
+Domain A — Visual:
+DINO ViT-S/8  ·  Oxford Pets / Stanford Cars / CUB-200  ·  14,000 images  ·  3 classes
+Domain B — Lab:
+PSFTT + Panel PE  ·  NHANES 2013–2018  ·  18,673 records  ·  34 lab tests  ·  3 panels (CBC / BMP / Lipid)
+
+=== SLIDE 5 ===
+Domain A: Visual Pipeline — Primary Contribution
+Architecture designed, implemented, and ablated here · 14,000 images · Oxford Pets / Stanford Cars / CUB-200
+Image
+Input
+14k images
+3 classes
+DINO
+ViT-S/8
+Patch features
+L8+L10+L12
+PCA
++ GMM
+1152→128 dim
+30 clusters
+Human
+SME
+label_tool.py
+post-hoc naming
+OneClass
+SVM
+Concept scores
+→ classification
+How Visual Concepts Are Named
+GMM finds 30 clusters of visually similar patch-feature vectors
+Human expert opens Streamlit label_tool.py — views thumbnail grid per cluster
+Assigns concept name, e.g. Cluster 7 → &apos;cat_pointy_ear&apos;, Cluster 12 → &apos;car_wheel_rim&apos;
+Concept score for an image = how strongly its patches activate each cluster
+Key Design Innovation (Gap 2)
+Multi-layer concat: L8 (texture) + L10 (part-shape) + L12 (semantics) = 1152-dim
+Single-layer baseline loses 30%+ cluster purity — ablation B confirms this
+Attention-guided FG masking removes background noise before GMM (ablation C)
+Semantic fine-tuning (ablation D) further sharpens part-level cluster separation
+
+=== SLIDE 6 ===
+Visual Pipeline Output: Interpretable Prediction in Action
+Every prediction traced to named concepts — no black-box, no post-hoc rationalisation
+Top concepts:
+bird:eye (0.12)  ·  bird:neck (0.12)  ·  bird:tail (0.12)  ·  bird:wings (0.11)  ·  bird:feather (0.07)
+Cat &amp; car concepts: all near-zero  ·
+Concepts found with zero class-label supervision — named post-hoc by human SME via label_tool.py
+
+=== SLIDE 7 ===
+Concept Specificity Confirmed Across All Three Classes
+Correct-class concepts dominate every prediction · Cross-class concepts register near-zero · Zero supervision at concept-learning stage
+CAT
+→   cat:face · cat:nose · cat:eye
+CAR
+→   car:bumpe corner · car:side fender · car:wheel arch
+BIRD
+→   bird:eye · bird:neck · bird:tail · bird:wings
+
+=== SLIDE 8 ===
+Domain B: Lab Pipeline — Generalisation Study
+Same 3-stage pipeline applied to tabular clinical data · PSFTT replaces DINO · LLM replaces human SME
+NHANES
+Data
+18,673 records
+34 lab tests
+PSFTT
+Encoder
+Panel PE + SSL
+L2+L4+L6 layers
+Per-Panel
+GMM
+3 panels × 10
+= 30 concepts
+LLM
+Labeling
+Deviation profile
+→ clinical name
+LogReg
+Probe
+30 concept scores
+→ diagnosis
+LLM-Mediated Grounding (Gap 3)
+GMM centroid = mean value of all 34 tests for records in that cluster
+Deviation computed: (centroid − population_mean) / std per test
+LLM receives: &apos;CBC cluster 4: LDL +2.1σ, cholesterol +1.8σ, HDL −0.3σ...&apos;
+LLM suggests label + confidence; human clinician validates or corrects
+PSFTT: Panel-Structured FT-Transformer
+Custom tokenizer: each lab test has its own weight vector  Tᵢ = xᵢ·Wᵢ + bᵢ
+Panel Positional Encoding: CBC=0, BMP=1, Lipid=2 — encodes clinical domain knowledge
+Two-scale SSL: within-panel masking + cross-panel dropout (addresses Lab-MAE gap)
+Per-panel embeddings: [N × 3 × 384-dim] fed to per-panel GMM independently
+
+=== SLIDE 9 ===
+All 30 Discovered Lab Concepts Are Clinically Coherent
+Named by LLM from numerical deviation profiles only — zero diagnosis labels used at any stage
+30/30
+concepts validated as clinically plausible   ·
+1
+&apos;healthy_population&apos; cluster spontaneously discovered (Lipid panel, n=1,221)
+CBC Panel
+hypercholesterolemia_pattern
+hypercholesterolemia
+dyslipidaemia
+pre_diabetes
+metabolic_syndrome
+hyperlipidemia_pattern
+dyslipidemia_profile
+elevated_lipid_pattern
+BMP / Biochem Panel
+metabolic_syndrome
+mild_metabolic_syndrome
+postprandial_hyperglycemia
+dyslipidaemia_pattern
+pre_diabetes_pattern
+hyperlipidemia_pattern
+elevated_ldl_pattern
+dyslipidemia
+Lipid Panel
+healthy_population  ✓
+hypercholesterolemia_pattern
+metabolic_syndrome_pattern
+pre_dyslipidaemia_pattern
+mildly elevated CVD risk
+hyperlipidemia_pattern
+mild_hyperglycemia
+metabolic_syndrome
+
+=== SLIDE 10 ===
+Classification Results: Concept Scores Carry Diagnostic Signal
+LogReg probe on 30 concept scores — no diagnosis labels used during concept learning
+Classification accuracy (%)
+Per-Class Performance (Test Set)
+Class
+Recall
+F1-score
+diabetes
+0.05
+0.09
+hypertension
+0.01
+0.02
+normal
+0.98
+0.67
+Interpretation
+50.9% = 1.53× chance — unsupervised concepts carry real diagnostic signal
+Classifier collapses to &apos;normal&apos; — GMM optimises cluster quality, not decision boundaries
+Trade-off is explicit: lower accuracy vs. a fully named, auditable concept trail per patient
+
+=== SLIDE 11 ===
+Design Decisions: Three Encoder Innovations Validated by Ablation
+Each decision directly addresses one literature gap and is tested against a controlled baseline
+Multi-Layer Extraction
+Gap 2
+Our Choice:
+Concat L2+L4+L6 (lab) / L8+L10+L12 (image)
+Alternative:
+Single final layer only
+Why:
+Each layer encodes different abstraction level: syntax → local pattern → semantic structure
+Ablation:
+Ablation: single-layer → silhouette score ↓, NMI ↓, class purity ↓
+Panel Positional Encoding
+Domain-specific
+Our Choice:
+Explicit tokens: CBC=0, BMP=1, Lipid=2
+Alternative:
+Learned PE or no PE
+Why:
+Encodes clinical knowledge: panel membership is clinically meaningful, not arbitrary
+Ablation:
+Ablation: learned PE → inter-panel concept blending increases, per-panel purity ↓
+Two-Scale SSL Masking
+Lab-MAE gap
+Our Choice:
+Within-panel masking + cross-panel dropout
+Alternative:
+Lab-MAE random masking
+Why:
+Learns local panel biochemistry AND cross-panel correlations simultaneously
+Ablation:
+Ablation: random masking only → NMI drops across all 3 panels
+
+=== SLIDE 12 ===
+Core Contributions: Three Pillars, Three Gaps Closed
+This work advances interpretable ML for clinical tabular and visual data simultaneously
+Pillar 1
+Unsupervised-First
+Concept Discovery
+Closes Gap 1 — TCAV / CBM / ACE
+GMM clustering on encoder features — zero concept labels at any stage
+Concepts emerge from data structure, named post-hoc only
+Demonstrated on image AND tabular clinical domains
+Pillar 2
+Domain-Informed
+Encoder Design
+Closes Gap 2 — DINO / FT-Transformer
+Multi-layer feature extraction produces richer concept representations
+Panel PE encodes clinical domain knowledge directly into architecture
+Two-scale SSL learns local + global clinical biochemical patterns
+Pillar 3
+LLM-Mediated
+Semantic Grounding
+Closes Gap 3 — ClusterLLM
+First application of LLM concept grounding to numerical clinical data
+LLM reads deviation profiles → clinical label → human validates
+Result: 30 clinically plausible concept names, zero supervision
+
+=== SLIDE 13 ===
+Conclusion &amp; Future Work
+What Was Achieved
+Two-domain pipeline with shared 3-stage architecture (Visual + Lab)
+30 clinically coherent concepts discovered from NHANES without any supervision
+LLM grounding of numerical data — novel extension beyond NLP (Gap 3)
+Concept scores achieve 1.53× chance accuracy with fully auditable predictions
+Ablations confirm each of the three design decisions against controlled baselines
+Future Work
+Extend to MIMIC-IV for physician-confirmed diagnosis codes at scale
+Non-linear concept classifiers (kernel SVM, MLP) to improve disease-class recall
+Weighted GMM sampling to reduce majority-class collapse in concept space
+Concept drift detection: alert when patient patterns fall outside known clusters
+Formal EU AI Act Article 13 compliance audit for clinical deployment
+
+=== SLIDE 14 ===
+Thank You
+Questions &amp; Discussion
+Unsupervised Concept Discovery for Interpretable Clinical AI
+Bhoopesh Singh  ·  CS4700 Dissertation  ·  bhoopesh.singh@gmail.com
+18,673
+NHANES Records
+30
+Clinical Concepts
+1.53×
+Above-Chance Accuracy

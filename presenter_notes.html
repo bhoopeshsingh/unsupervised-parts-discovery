@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Viva Presenter Notes — Bhoopesh Nandan Singh</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    color: #111;
+    padding: 20px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+    color: #111;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #555;
+    margin-bottom: 24px;
+  }
+
+  .slide-card {
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+
+  /* Slide header — click to collapse */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 18px;
+    cursor: pointer;
+    user-select: none;
+    background: #f0f4ff;
+    border-bottom: 1px solid #d6e0ff;
+  }
+  .slide-header:hover { background: #e6ecff; }
+
+  .slide-num {
+    background: #1d4ed8;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .slide-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e3a8a;
+    flex: 1;
+  }
+
+  .chevron {
+    font-size: 0.7rem;
+    color: #6b7280;
+    transition: transform 0.2s;
+  }
+  .slide-card.open .chevron { transform: rotate(90deg); }
+
+  /* Body */
+  .slide-body {
+    display: none;
+    padding: 18px 20px;
+  }
+  .slide-card.open .slide-body { display: block; }
+
+  /* What to say section */
+  .section-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b7280;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .say-box {
+    background: #f0fdf4;
+    border-left: 4px solid #16a34a;
+    border-radius: 0 6px 6px 0;
+    padding: 12px 14px;
+    font-size: 0.87rem;
+    line-height: 1.75;
+    color: #111;
+  }
+  .say-box p + p { margin-top: 8px; }
+
+  /* Terms table */
+  .terms-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-size: 0.82rem;
+  }
+  .terms-table th {
+    text-align: left;
+    padding: 7px 10px;
+    background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #374151;
+  }
+  .terms-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+    line-height: 1.55;
+  }
+  .terms-table tr:last-child td { border-bottom: none; }
+  .term-name {
+    font-weight: 700;
+    color: #1d4ed8;
+    white-space: nowrap;
+    min-width: 160px;
+  }
+  .term-def { color: #222; }
+  .term-answer {
+    color: #15803d;
+    font-size: 0.8rem;
+  }
+
+  /* Likely questions */
+  .q-list { list-style: none; margin-top: 4px; }
+  .q-list li {
+    display: flex;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+  .q-list li:nth-child(odd)  { background: #fefce8; }
+  .q-list li:nth-child(even) { background: #fff7ed; }
+  .q-icon { font-size: 0.95rem; flex-shrink: 0; margin-top: 1px; }
+  .q-text { color: #111; }
+  .q-hint {
+    font-size: 0.76rem;
+    color: #555;
+    margin-top: 3px;
+  }
+
+  /* divider */
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 14px 0; }
+
+  /* print hint */
+  .print-hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-bottom: 16px;
+  }
+
+  @media print {
+    .slide-body { display: block !important; }
+    .chevron { display: none; }
+    .slide-card { page-break-inside: avoid; }
+    body { background: white; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Viva Presenter Notes</h1>
+<div class="subtitle">Unsupervised Concept Discovery for Interpretable Prediction &nbsp;·&nbsp; CS4700 Dissertation &nbsp;·&nbsp; Bhoopesh Nandan Singh<br>
+Click any slide to expand · Ctrl+P to print all</div>
+
+<p class="print-hint">💡 Tip: Open this in a browser. Click each slide to expand notes. Use Ctrl+P to print a full copy.</p>
+
+
+<!-- ═══════════════ SLIDE 1 ═══════════════ -->
+<div class="slide-card open" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">1</div>
+    <div class="slide-title">Title Slide — Unsupervised Concept Discovery for Interpretable Prediction</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Good morning. My dissertation is about making AI predictions easier to understand and trust — not just accurate. The big question I asked was: what if we let the system discover its own concepts from raw data, without anyone telling it what to look for, and then use those concepts to explain its decisions?</p>
+      <p>I tested this idea in two very different areas — first on images of cats, cars, and birds, and then on real patient blood test data from a large public health survey. I will walk you through why I did this, how the system works, what the results show, and where it can go next.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Unsupervised</td>
+        <td class="term-def">No labels used during learning — the model finds structure by itself.</td>
+        <td class="term-answer">Labels are only introduced at the final classification step, not during concept discovery.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Concept</td>
+        <td class="term-def">A named, human-understandable cluster of similar patterns — e.g. "cat_ear" or "elevated LDL".</td>
+        <td class="term-answer">A concept is a GMM cluster given a semantic name by a human or LLM after clustering is complete.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Interpretable Prediction</td>
+        <td class="term-def">A prediction whose reasoning can be inspected — you can see which concepts drove the decision.</td>
+        <td class="term-answer">Instead of a black-box score, the system outputs "predicted: cat because cat_ear=0.21, cat_face=0.18 were high."</td>
+      </tr>
+      <tr>
+        <td class="term-name">DINO ViT-S/8</td>
+        <td class="term-def">A self-supervised vision transformer that produces semantically meaningful patch features without labels.</td>
+        <td class="term-answer">We chose DINO because its self-supervised training naturally aligns patch features to semantic object parts.</td>
+      </tr>
+      <tr>
+        <td class="term-name">NHANES</td>
+        <td class="term-def">National Health and Nutrition Examination Survey — a large US public health dataset with blood tests and diagnoses.</td>
+        <td class="term-answer">18,673 records across three cycles (2013–18), covering CBC, BMP, and Lipid panels — 34 lab tests total.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 2 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">2</div>
+    <div class="slide-title">The Challenge: Interpretable Prediction from Unlabeled Data</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Imagine a doctor gets an AI system that says "this patient has diabetes — 87% confident." That sounds useful, but the doctor has no way to check whether that decision makes sense. They cannot see what the system looked at, they cannot challenge it, and if it is wrong, they have no idea why. That is the core problem this work addresses.</p>
+      <p>There are existing methods that try to make AI more explainable by using named concepts. But almost all of them need someone to sit down beforehand and define those concepts — which takes a lot of time and expert effort, and still introduces human bias into what the system looks for.</p>
+      <p>So my research question was simple: what if the system discovered its own concepts first, and we only gave them names afterwards? That way the structure comes from the data, not from our assumptions.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">GDPR Article 22</td>
+        <td class="term-def">EU law giving individuals the right not to be subject to automated decisions without human review or explanation.</td>
+        <td class="term-answer">It legally mandates explainability for automated patient decisions — accuracy alone doesn't satisfy compliance.</td>
+      </tr>
+      <tr>
+        <td class="term-name">EU AI Act</td>
+        <td class="term-def">EU regulation classifying AI systems by risk — medical AI is high-risk and requires transparency and auditability.</td>
+        <td class="term-answer">Clinical decision-support systems fall under high-risk AI and must provide auditable reasoning trails.</td>
+      </tr>
+      <tr>
+        <td class="term-name">TCAV</td>
+        <td class="term-def">Testing with Concept Activation Vectors (Kim, 2018) — tests whether a concept influences a model's prediction, but requires labeled concept examples upfront.</td>
+        <td class="term-answer">TCAV needs pre-labeled concept probe datasets. My work removes this requirement by discovering concepts first.</td>
+      </tr>
+      <tr>
+        <td class="term-name">CBM (Concept Bottleneck Model)</td>
+        <td class="term-def">Forces the model to predict concept labels as an intermediate step before the final prediction — requires concept annotations on every training image.</td>
+        <td class="term-answer">CBM requires concept labels during training. My pipeline discovers concepts unsupervised and names them post-hoc.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Post-hoc naming</td>
+        <td class="term-def">Assigning semantic names to clusters after the clustering is already done — names don't change the clusters, only make them readable.</td>
+        <td class="term-answer">Post-hoc naming means the model's internal structure is fixed by the data, not by the names we give it.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 3 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">3</div>
+    <div class="slide-title">Three Literature Gaps This Work Addresses</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>When I reviewed the existing work, I found three specific problems that nobody had fully solved, and each one shaped a decision I made in my system.</p>
+      <p>The first problem: every existing method for concept-based explanations needs you to define the concepts upfront — before training even starts. That is expensive and biased. My answer was to let the system find its own groups in the data first, and only attach names to those groups afterwards.</p>
+      <p>The second problem: most systems only look at the very last layer of a neural network when extracting features. But earlier layers carry different kinds of information — texture, shape, and then meaning. My answer was to take features from three different layers and combine them, which I then proved was better by running experiments where I removed each layer one at a time.</p>
+      <p>The third problem: using a language model to name clusters has only ever been done with text data. My answer was to extend that idea to numbers — specifically, patient blood test values — which had not been done before.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">ACE</td>
+        <td class="term-def">Automated Concept-based Explanation — uses image segmentation to extract concepts, but still requires pixel-level preprocessing and human review of segments.</td>
+        <td class="term-answer">ACE uses image patches but still requires a segmentation step; my work uses DINO attention masking instead, which is fully automatic.</td>
+      </tr>
+      <tr>
+        <td class="term-name">FT-Transformer</td>
+        <td class="term-def">Feature Tokenization Transformer — each tabular feature gets its own learned linear embedding. Used for numerical tabular data like lab tests.</td>
+        <td class="term-answer">Each lab test value gets its own weight vector: T_i = x_i × W_i + b_i. No weight sharing across features.</td>
+      </tr>
+      <tr>
+        <td class="term-name">ClusterLLM</td>
+        <td class="term-def">A method (EMNLP 2023) that uses LLMs to label text clusters. My work extends this idea to numerical data.</td>
+        <td class="term-answer">ClusterLLM was designed for text. I adapt it to numerical deviation profiles — a novel extension to the clinical domain.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Multi-layer extraction</td>
+        <td class="term-def">Taking features from several intermediate layers of a transformer, not just the final one, and concatenating them.</td>
+        <td class="term-answer">L8 captures texture, L10 captures part-shape, L12 captures semantics. Concatenating all three gives richer concept representations than any single layer alone.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Ablation</td>
+        <td class="term-def">Removing one component at a time to measure how much it contributes to performance.</td>
+        <td class="term-answer">I ran four ablations — removing multi-layer, FG masking, fine-tuning, and panel PE — to prove each design decision is justified by measured improvement.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 4 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">4</div>
+    <div class="slide-title">Our Solution: A Three-Stage Concept-Based Pipeline</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>My solution has the same three steps for both images and lab data, which is what makes it a transferable framework rather than a one-off trick.</p>
+      <p>Step one is Discover. We feed the raw data into an encoder — DINO for images, and a custom transformer for lab data — and let a clustering algorithm find natural groups. At this point we have no labels and no human input at all. The system is just finding structure in the data on its own.</p>
+      <p>Step two is Name. A human expert looks at the groups and gives them readable names. For images, this means looking at a grid of image patches from each group and typing something like "cat ear" or "car wheel." For lab data, a language model reads the average blood test values of each group and suggests a clinical name like "elevated cholesterol pattern," which a human doctor then checks and confirms.</p>
+      <p>Step three is Predict. Each image or patient record gets converted into a score for each named concept — how strongly does this input show that concept? A simple classifier then uses those scores to make a prediction. And because the prediction is based on named concepts, you can always look back and see exactly which concepts drove it.</p>
+      <p>The key thing to note is that class labels — cat, car, bird, diabetes — are only introduced in step three. Steps one and two are entirely label-free.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">GMM (Gaussian Mixture Model)</td>
+        <td class="term-def">A clustering algorithm that models the data as a mixture of Gaussian distributions — unlike K-Means, it handles clusters of different sizes and shapes.</td>
+        <td class="term-answer">We chose GMM over K-Means because concept clusters are unequal in size. GMM with diagonal covariance handles this naturally and gives soft membership probabilities.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Concept activation vector</td>
+        <td class="term-def">A fixed-length vector where each element is how strongly a given input activates a named concept (e.g. cat_ear=0.21, car_wheel=0.00).</td>
+        <td class="term-answer">For images: fraction of patches assigned to each concept cluster. For lab: GMM soft membership probability per cluster.</td>
+      </tr>
+      <tr>
+        <td class="term-name">PSFTT</td>
+        <td class="term-def">Panel-Structured FT-Transformer — a transformer adapted for clinical lab panels with panel positional encoding and two-scale SSL.</td>
+        <td class="term-answer">PSFTT extends FT-Transformer by adding panel identity tokens and a two-scale SSL objective specifically designed for multi-panel lab data.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Logistic Regression probe</td>
+        <td class="term-def">A simple linear classifier trained on concept scores — deliberately simple so that performance comes from concept quality, not classifier complexity.</td>
+        <td class="term-answer">We use logistic regression intentionally. If a complex classifier were needed, it would suggest the concepts don't carry enough signal themselves.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 5 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">5</div>
+    <div class="slide-title">Domain A: Visual Pipeline — Primary Contribution</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Domain A is the primary contribution. We start with 12,000 images across three classes — cats, cars, and birds — from Oxford Pets, Stanford Cars, and CUB-200.</p>
+      <p>DINO ViT-S/8 processes each 224×224 image as a 28×28 grid of patches — 784 patches total. We extract features from layers 8, 10, and 12 and concatenate them into 1152-dimensional vectors. Foreground masking keeps only the top 25% most-attended patches.</p>
+      <p>PCA reduces 1152 to 128 dimensions, then GMM with 30 components clusters all patches. A human expert uses the Streamlit labeling tool to name each cluster from a thumbnail grid.</p>
+      <p>Each image becomes a 22-dimensional concept score vector — the fraction of its patches in each accepted concept cluster — and logistic regression classifies from that vector.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">ViT-S/8 patch size</td>
+        <td class="term-def">ViT-S/8 divides a 224×224 image into 8×8 pixel patches → 28×28 = 784 patches per image.</td>
+        <td class="term-answer">Patch size 8 was chosen over 16 because it gives finer spatial resolution — 784 vs 196 patches — capturing small parts like eyes or headlights.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Foreground masking (fg_threshold=0.75)</td>
+        <td class="term-def">DINO's CLS attention highlights the object. We keep only the top 25% most-attended patches, discarding sky, floor, and background.</td>
+        <td class="term-answer">Without FG masking, background patches pollute clusters. Ablation C shows NMI drops from 0.326 to 0.267 without it.</td>
+      </tr>
+      <tr>
+        <td class="term-name">PCA (128 dims)</td>
+        <td class="term-def">Principal Component Analysis — reduces 1152 features to 128 while keeping ~90% of variance. Makes GMM fitting tractable.</td>
+        <td class="term-answer">GMM fitting is O(n·k·d²) — at 1152 dimensions this is too slow. PCA reduces the space while retaining most structure.</td>
+      </tr>
+      <tr>
+        <td class="term-name">30 clusters → 22 concepts</td>
+        <td class="term-def">GMM produces 30 clusters. After human labeling, 8 were rejected as noise (mixed-class or background texture). 22 remain.</td>
+        <td class="term-answer">K=30 was chosen empirically: a single-class pilot on cat features found K=10 maximised silhouette score (0.61), scaled by 3 classes = 30.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Concept score formula</td>
+        <td class="term-def">Score = (number of patches assigned to concept cluster) ÷ (total patches in image). Range is 0 to ~0.20.</td>
+        <td class="term-answer">It is a simple proportion — no cosine similarity. This gives a wide dynamic range and is directly interpretable as "what fraction of this image looks like concept X."</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 6 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">6</div>
+    <div class="slide-title">Visual Pipeline Output: Interpretable Prediction in Action</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>This slide shows the system working on an unseen image of a bird.</p>
+      <p>The spatial map on the left shows which concept each patch was assigned to — different colours represent different named concepts. You can see bird-relevant concepts covering the body, wings, and head regions.</p>
+      <p>The bar chart on the right shows concept contributions to the predicted class "bird". Positive bars mean the concept pushed the prediction toward "bird"; near-zero bars for cat and car concepts confirm the prediction isn't contaminated by the wrong class.</p>
+      <p>The key point is that this prediction is fully auditable — a clinician or examiner can point to specific named parts that drove the decision.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Contribution formula</td>
+        <td class="term-def">contribution_i = weight_i × (activation_i − mean_activation_i). Weight = logistic regression coefficient for the predicted class; mean = average activation across training set.</td>
+        <td class="term-answer">Mean subtraction is important — it tells you how unusual this image's activation is, not just its raw score. A high activation for a common concept contributes less than a high activation for a rare one.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Why bar length changes per class</td>
+        <td class="term-def">The logistic regression has a different weight row for each class. The same concept can have a high weight for "bird" but low weight for "cat".</td>
+        <td class="term-answer">The coefficient matrix is [3 classes × 22 concepts]. When the predicted class changes, a different row is used, so bar lengths change even for the same image.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Zero supervision on concepts</td>
+        <td class="term-def">The concept clusters were found without any class labels. The class labels only come in when training the final logistic regression.</td>
+        <td class="term-answer">Concept names like "bird:wings" are post-hoc labels assigned by a human after GMM clustering. The GMM itself never saw the word "bird".</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 7 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">7</div>
+    <div class="slide-title">Concept Specificity Confirmed Across All Three Classes</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>This slide shows that concept activations are class-specific — cat images activate cat concepts, car images activate car concepts, bird images activate bird concepts, and cross-class activations are near zero.</p>
+      <p>This is important because it rules out the possibility that the classifier is just memorising raw features. The concepts are genuinely discriminative at a semantic level — they capture named object parts, not arbitrary texture patterns.</p>
+      <p>This pattern also validates the unsupervised clustering — GMM found class-aligned structure in feature space without ever seeing class labels.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Concept specificity</td>
+        <td class="term-def">A concept that activates strongly for one class and weakly for others — evidence that it captures class-relevant structure.</td>
+        <td class="term-answer">Cat concepts like cat:face activate near zero on cars and birds. This specificity is why 22 concepts are enough to reach 98.9% accuracy.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Discriminative vs descriptive</td>
+        <td class="term-def">Discriminative = helps distinguish classes. Descriptive = describes appearance but may not help distinguish. We want discriminative concepts.</td>
+        <td class="term-answer">A concept for "grey texture" might appear in all three classes and be descriptive but not discriminative. Our concepts are discriminative because they cluster class-specific parts.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 8 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">8</div>
+    <div class="slide-title">Domain B: Lab Pipeline — Secondary Validation</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Domain B checks whether the same three-stage concept pipeline transfers to clinical tabular data. The data is NHANES — 18,673 patient records with 34 blood lab tests across three panels: CBC, BMP, and Lipid.</p>
+      <p>Instead of DINO, we use PSFTT — a transformer built specifically for lab panels. Instead of spatial patches, we have panel-patches: per-panel feature vectors extracted from intermediate transformer layers.</p>
+      <p>Instead of a single global GMM, we run three independent GMMs — one per panel — giving 10 clusters per panel and 30 concept dimensions total.</p>
+      <p>Instead of a human naming from image thumbnails, an LLM reads the deviation profile of each cluster centroid — "CBC cluster 4: LDL +2.1σ, cholesterol +1.8σ..." — and suggests a clinical name. A human clinician validates or corrects it.</p>
+      <p>This is a transfer study, not the primary contribution. The primary contribution is the image domain.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">CBC / BMP / Lipid panels</td>
+        <td class="term-def">CBC = Complete Blood Count (14 tests: WBC, RBC, haemoglobin…). BMP = Basic Metabolic Panel (16 tests: glucose, creatinine, electrolytes…). Lipid = cholesterol, HDL, LDL, triglycerides (4 tests).</td>
+        <td class="term-answer">Three clinically defined groups of related blood tests. We treat each panel as a structural unit in the architecture — like a "body region" in the image domain.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Panel Positional Encoding (Panel PE)</td>
+        <td class="term-def">An extra learned embedding added to each feature's token to tell the transformer which panel it belongs to (CBC=0, BMP=1, Lipid=2).</td>
+        <td class="term-answer">Without panel PE, the transformer treats all 34 features identically. Panel PE encodes clinical domain knowledge — CBC features are biochemically different from lipid features.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Two-Scale SSL</td>
+        <td class="term-def">Two self-supervised learning objectives: (1) within-panel masking — 40% of features masked per panel, reconstruct from unmasked; (2) cross-panel dropout — entire panel dropped, CLS token predicts its mean deviation.</td>
+        <td class="term-answer">Scale 1 learns local panel biochemistry. Scale 2 learns inter-panel correlations — e.g. high LDL tends to co-occur with high glucose. Together they produce richer representations.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Clinical deviation encoding</td>
+        <td class="term-def">Converts raw lab values to signed deviations: (value − midpoint) / half_range, capped at ±4. E.g. WBC=15 → +2.23 deviations above normal.</td>
+        <td class="term-answer">This encodes clinical meaning directly — +2.0 means "moderately elevated," −3.0 means "severely low." It's rule-based normalisation, not learned, which makes it interpretable.</td>
+      </tr>
+      <tr>
+        <td class="term-name">No label leakage</td>
+        <td class="term-def">The diagnosis labels (diabetes/hypertension from DIQ010, BPQ020 columns) are stored in a separate validation file and never loaded during stages L1–L6.</td>
+        <td class="term-answer">Diagnosis labels are only loaded at L7 to score the classifier. This is the proof that concept discovery is genuinely unsupervised.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 9 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">9</div>
+    <div class="slide-title">Lab Concept Coherence — Clinically Meaningful Clusters</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>All 30 discovered lab concepts were validated as clinically plausible — the LLM labels were checked by a human against clinical reference ranges and accepted.</p>
+      <p>Notably, one cluster in the Lipid panel spontaneously emerged as a "healthy_population" cluster — 1,221 records with all values near normal range. This was not programmed; it emerged from the data structure alone.</p>
+      <p>This slide shows that the pipeline doesn't just predict labels — it produces an auditable clinical concept vocabulary that a clinician could inspect and trust. That is the core value proposition beyond accuracy numbers.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Plausible</td>
+        <td class="term-def">Reasonable and believable based on available evidence — not yet proven, but consistent with known clinical knowledge.</td>
+        <td class="term-answer">A concept like "metabolic_syndrome" is plausible if its centroid shows elevated glucose, LDL, and low HDL simultaneously — which matches clinical diagnostic criteria.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Metabolic syndrome</td>
+        <td class="term-def">A cluster of conditions — high blood sugar, high LDL, low HDL, high triglycerides — that together increase risk of heart disease and diabetes.</td>
+        <td class="term-answer">If a GMM cluster's centroid shows simultaneously elevated glucose, LDL, and triglycerides with low HDL, naming it "metabolic_syndrome" is clinically justified.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Cluster centroid deviation profile</td>
+        <td class="term-def">The average deviation value for each of the 34 lab tests across all patients in a cluster. This profile is what the LLM reads to suggest a name.</td>
+        <td class="term-answer">The LLM receives a text like "LDL +2.1σ, cholesterol +1.8σ, HDL −0.3σ" and maps this to a clinical pattern from medical knowledge.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 10 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">10</div>
+    <div class="slide-title">Classification Results: Concept Scores Carry Diagnostic Signal</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>For lab classification, our concept-score features achieve 50.9% accuracy versus a 33.3% chance baseline in a three-class problem. That is 1.53 times chance, which proves the discovered concepts carry real diagnostic signal.</p>
+      <p>However, the per-class recall table tells a more honest story: normal recall is 97.7%, but diabetes recall is only 4.9% and hypertension recall is 1.3%. The classifier is essentially collapsing to "predict normal" for most patients.</p>
+      <p>The reason is class imbalance — NHANES has far more healthy patients than diabetic or hypertensive ones. The GMM optimises cluster quality for the data distribution as it is, not for balanced class representation.</p>
+      <p>I report this transparently because it is important. The result is evidence of signal, not a claim of clinical deployment readiness. The fix — weighted GMM sampling or a balanced training strategy — is flagged as future work.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Chance baseline (33.3%)</td>
+        <td class="term-def">With 3 equally likely classes, random guessing gets 1/3 = 33.3% correct. Any system above this is doing something meaningful.</td>
+        <td class="term-answer">50.9% vs 33.3% means the concepts are providing real signal — the system is not just guessing randomly.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Recall</td>
+        <td class="term-def">Out of all actual patients with a condition, what fraction did the system correctly identify. Recall = True Positives ÷ (True Positives + False Negatives).</td>
+        <td class="term-answer">Diabetes recall of 4.9% means we correctly identify only 5 out of every 100 diabetic patients. This is a serious limitation we acknowledge.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Class imbalance</td>
+        <td class="term-def">When one class has far more examples than others — e.g. 70% normal, 20% hypertension, 10% diabetes — the model learns to favour the majority class.</td>
+        <td class="term-answer">The classifier defaults to "normal" for most patients because "normal" is the most common class. This inflates overall accuracy while failing on minority classes.</td>
+      </tr>
+      <tr>
+        <td class="term-name">1.53× above chance</td>
+        <td class="term-def">50.9% ÷ 33.3% = 1.53. The system is 53% better than random guessing.</td>
+        <td class="term-answer">It proves the concept features contain real diagnostic structure. A random concept assignment would give ~33.3% accuracy.</td>
+      </tr>
+      <tr>
+        <td class="term-name">F1-score</td>
+        <td class="term-def">The harmonic mean of precision and recall. Low F1 for diabetes (0.09) confirms the classifier is nearly useless for that class despite overall accuracy looking reasonable.</td>
+        <td class="term-answer">F1 of 0.09 for diabetes means even when the system says "diabetes," it is wrong most of the time. This is why we need future work on class balancing.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 11 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">11</div>
+    <div class="slide-title">Design Decisions Validated by Ablation</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Every major design decision in this pipeline is justified by a controlled ablation — not just intuition.</p>
+      <p>Multi-layer extraction: removing it and using only the final layer drops silhouette score, NMI, and class purity. Each layer contributes a different level of abstraction — texture at L8, structure at L10, semantics at L12.</p>
+      <p>Panel Positional Encoding: replacing it with learned PE or removing it increases inter-panel concept blending and reduces per-panel purity. Explicit panel tokens encode clinical domain structure that the model otherwise has to infer.</p>
+      <p>Two-scale SSL: using only random masking (like Lab-MAE) instead of the two-scale objective drops NMI across all three panels. The within-panel and cross-panel objectives capture different levels of biochemical structure.</p>
+      <p>NMI here means Normalised Mutual Information — a measure of how well cluster assignments correspond to true class structure.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">NMI (Normalised Mutual Information)</td>
+        <td class="term-def">Measures how much information the cluster assignments share with the true class labels, normalised to [0,1]. Higher = clusters align more with classes.</td>
+        <td class="term-answer">NMI of 0.326 (full model) vs 0.267 (no FG masking) means foreground masking improves cluster-class alignment by 22%.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Cluster purity</td>
+        <td class="term-def">The fraction of patches in a cluster that belong to the same true class. High purity = each cluster is dominated by one class.</td>
+        <td class="term-answer">Purity of 0.891 means 89.1% of patches in a given cluster come from the same class — confirming that clusters correspond to class-specific parts.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Silhouette score</td>
+        <td class="term-def">Measures how well-separated clusters are in feature space. Range −1 to +1; higher is better. Used to validate K selection.</td>
+        <td class="term-answer">Silhouette score of 0.052 for the full model confirms the GMM found well-separated clusters. It peaked at K=10 per class during the pilot sweep.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Ablation D paradox</td>
+        <td class="term-def">Pre-finetune features actually show higher NMI (0.363) than post-finetune (0.326). This seems contradictory — fine-tuning makes things worse?</td>
+        <td class="term-answer">Fine-tuning tightens semantic geometry (better silhouette: 0.052 vs 0.045) at the cost of inter-class separation. It optimises intra-class part consistency, not class purity. This is a known trade-off in contrastive learning.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 12 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">12</div>
+    <div class="slide-title">Core Contributions: Three Pillars, Three Gaps Closed</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>The three contributions map directly to the three gaps from slide 3.</p>
+      <p>Pillar 1 — Unsupervised-first concept discovery: concepts are found by GMM clustering on encoder features with zero concept labels at any stage. Labels enter only in the final classifier. This closes Gap 1 against TCAV, CBM, and ACE.</p>
+      <p>Pillar 2 — Domain-informed encoder design: multi-layer extraction, panel positional encoding, and two-scale SSL are each tailored to the structure of their respective domain and validated by ablation. This closes Gap 2 against single-layer approaches.</p>
+      <p>Pillar 3 — LLM-mediated semantic grounding: this is the first application of LLM concept naming to numerical clinical deviation profiles. The LLM reads deviation patterns and suggests names; a human clinician validates them. This closes Gap 3 against text-only ClusterLLM.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">Zero concept supervision</td>
+        <td class="term-def">No concept labels at any stage of feature extraction or clustering. The only supervision is the final class label used to train the logistic regression.</td>
+        <td class="term-answer">The phrase "zero concept supervision" specifically means we never provided labels like "this patch is an ear" or "this cluster is metabolic syndrome" during training. Those names come after.</td>
+      </tr>
+      <tr>
+        <td class="term-name">LLM grounding of numerical data</td>
+        <td class="term-def">Feeding numerical statistics to an LLM and asking it to interpret them using medical knowledge — converting numbers to clinical language.</td>
+        <td class="term-answer">The LLM receives "LDL +2.1σ, cholesterol +1.8σ" and maps this to "hypercholesterolemia_pattern" using its medical training. Human validation confirms or corrects this.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Transferable framework</td>
+        <td class="term-def">The same three-stage pipeline — discover, name, predict — works across two very different data modalities without changing the core logic.</td>
+        <td class="term-answer">The pipeline architecture is modality-agnostic. Swap DINO for PSFTT, image patches for panel-patches, and human naming for LLM naming — the three stages remain identical.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 13 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">13</div>
+    <div class="slide-title">Conclusion &amp; Future Work</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>In conclusion, this work shows that concept activation features can support interpretable prediction across two modalities.</p>
+      <p>In the visual domain, results are strong — 98.9% test accuracy from 22 unsupervised concepts, with clear concept-level explanations per image.</p>
+      <p>In the lab domain, results are above chance at 1.53×, with transparent reporting of class imbalance limitations and clear next steps.</p>
+      <p>Future work focuses on four directions: scaling to MIMIC-IV for physician-confirmed diagnoses; non-linear classifiers to improve minority-class recall; weighted GMM sampling to reduce majority-class collapse; and concept drift detection for deployment safety.</p>
+    </div>
+
+    <div class="section-label">🔑 Key Terms to Know</div>
+    <table class="terms-table">
+      <tr><th>Term</th><th>Plain-English Meaning</th><th>One-Line Answer if Asked</th></tr>
+      <tr>
+        <td class="term-name">MIMIC-IV</td>
+        <td class="term-def">Medical Information Mart for Intensive Care IV — a large public hospital database with ICU records, lab results, and physician-confirmed diagnoses.</td>
+        <td class="term-answer">MIMIC-IV would provide physician-confirmed ICD diagnosis codes at scale, allowing proper clinical validation beyond the NHANES questionnaire labels.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Weighted GMM sampling</td>
+        <td class="term-def">Adjusting the GMM fitting process to give more weight to minority-class patients so their patterns are not overwhelmed by the majority class.</td>
+        <td class="term-answer">Currently GMM treats all records equally, so "normal" patterns dominate. Weighted sampling would force GMM to find clusters that represent diabetic and hypertensive patterns more distinctly.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Concept drift detection</td>
+        <td class="term-def">Monitoring whether new patient records fall outside the known concept clusters — a safety mechanism for deployed clinical AI.</td>
+        <td class="term-answer">If a new patient's lab values don't fit any known concept cluster, that's an alert that the model may not be reliable for that patient — rather than silently giving a wrong prediction.</td>
+      </tr>
+      <tr>
+        <td class="term-name">Non-linear classifiers</td>
+        <td class="term-def">Classifiers like kernel SVM or MLP that can learn curved decision boundaries — better for imbalanced problems than logistic regression.</td>
+        <td class="term-answer">Logistic regression is linear — it can only draw straight decision boundaries. For minority classes that overlap with the majority, a non-linear classifier may separate them better.</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════ SLIDE 14 ═══════════════ -->
+<div class="slide-card" onclick="toggle(event, this)">
+  <div class="slide-header">
+    <div class="slide-num">14</div>
+    <div class="slide-title">Thank You — Questions &amp; Discussion</div>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="slide-body">
+    <div class="section-label">📢 What to Say</div>
+    <div class="say-box">
+      <p>Thank you. The three numbers to remember are: 98.8% image-domain test accuracy, 50.9% lab-domain accuracy versus 33.3% chance, and 1.53× above-chance — all from predictions made through named, auditable concept activations.</p>
+      <p>I am happy to discuss any part of the pipeline in detail — architecture decisions, ablations, LLM-assisted labeling, the K-selection process, the contribution formula, or the limitations and next steps.</p>
+    </div>
+
+    <div class="section-label">❓ Most Likely Examiner Questions</div>
+    <ul class="q-list">
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>Why not use a more powerful classifier than logistic regression?</strong></div>
+          <div class="q-hint">Answer: Intentional. If a complex classifier were needed, it would suggest the concepts don't carry enough signal by themselves. The linear probe tests concept quality, not classifier power. Future work adds non-linear classifiers.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>How did you choose K=30 clusters?</strong></div>
+          <div class="q-hint">Answer: Empirically. A single-class pilot on cat features ran MiniBatchKMeans across K=5 to 20. Silhouette score peaked at K=10 (score=0.61, Table 6). Scaled by 3 classes = K=30. Post-hoc, 8 clusters were noise, leaving 22 — about 7 per class, which validated the choice.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>Isn't concept naming subjective? What if two people name clusters differently?</strong></div>
+          <div class="q-hint">Answer: Yes, naming is subjective, but it does not affect the model's behaviour. The cluster structure is fixed by GMM. Different names change bar chart labels but not classification accuracy. Reproducibility of naming is a known limitation — future work uses LLM-assisted naming with inter-rater agreement metrics.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>The lab results are only 50.9% — is that good enough to claim success?</strong></div>
+          <div class="q-hint">Answer: It's above chance (33.3%) and the concepts were discovered without any diagnosis labels. The claim is not clinical deployment readiness — it is proof of concept that unsupervised lab concepts carry diagnostic signal. The limitation is class imbalance, which we report transparently with a clear fix in future work.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>Ablation D shows pre-finetune has higher NMI than fine-tuned — doesn't that mean fine-tuning hurts?</strong></div>
+          <div class="q-hint">Answer: Fine-tuning optimises intra-class part consistency (semantic tightness), not inter-class separation. The silhouette score confirms A is geometrically tighter (0.052 vs 0.045). NMI measures cluster-class alignment — a different property. The trade-off is deliberate: we want tighter concept geometry, even at the cost of some class-level NMI.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>How do you prove there is no label leakage in the lab pipeline?</strong></div>
+          <div class="q-hint">Answer: The diagnosis labels (DIQ010, BPQ020) are stored in a separate validation file that is not loaded until stage L7. All clustering, PSFTT training, and concept building in stages L1–L6 have no access to diagnosis labels. This is verifiable in run_lab_pipeline.py — the validation file path is only passed to the L7 classification function.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>Why use GMM instead of K-Means?</strong></div>
+          <div class="q-hint">Answer: Two reasons. First, concept clusters are unequal in size — cat:fur covers ~15% of patches, cat:eye covers ~3%. K-Means assumes equal-variance spherical clusters and splits large ones and merges small ones. GMM with diagonal covariance handles unequal sizes naturally. Second, GMM gives soft probability membership — more principled than hard nearest-centroid assignment.</div>
+        </div>
+      </li>
+      <li>
+        <span class="q-icon">🔵</span>
+        <div>
+          <div class="q-text"><strong>What is the contribution formula and why do bar lengths change for the same concept across different classes?</strong></div>
+          <div class="q-hint">Answer: contribution_i = coef_row[i] × (activation_i − mean_activation_i). The coef_row is taken from the logistic regression weight matrix row corresponding to the predicted class. Since there is a different weight row for each class (matrix is [3 × 22]), the same concept has a different weight for "cat" vs "bird", so bar lengths change when the predicted class changes.</div>
+        </div>
+      </li>
+    </ul>
+  </div>
+</div>
+
+
+<script>
+function toggle(event, card) {
+  // Don't toggle if clicking inside the body (for text selection)
+  if (event.target.closest('.slide-body')) return;
+  card.classList.toggle('open');
+}
+// Open all by default? No — start closed except slide 1 (already has class open in HTML)
+</script>
+
+</body>
+</html>
